@@ -13,11 +13,20 @@
     />
   </head>
   <body>
-    <header class="app-header">
-      <div>
-        <h1>Gestionnaire de Commandes</h1>
-        <p>Ajoutez vos produits, suivez vos commandes et scannez les codes-barres.</p>
+    <nav class="app-nav">
+      <div class="nav-brand">
+        <div class="nav-logo">📦</div>
+        <div>
+          <strong>Gestionnaire de Commandes</strong>
+          <small>Suivi centralisé des colis</small>
+        </div>
       </div>
+      <ul class="nav-links">
+        <li><button type="button" class="nav-link active" data-nav="home">Accueil</button></li>
+        <li><button type="button" class="nav-link" data-nav="inventory">Inventaire</button></li>
+        <li><button type="button" class="nav-link" data-nav="orders">Commandes</button></li>
+        <li><button type="button" class="nav-link" data-nav="pickup">Retrait colis</button></li>
+      </ul>
       <div class="header-actions">
         <label class="switch">
           <input type="checkbox" id="themeToggle" />
@@ -25,154 +34,223 @@
         </label>
         <span class="switch-label" id="themeLabel">Mode sombre</span>
       </div>
-    </header>
-    <main>
-      <section class="panel">
-        <header class="panel-header">
+    </nav>
+
+    <main class="page-container">
+      <section class="page page-home active" data-page="home">
+        <div class="hero">
+          <div class="hero-content">
+            <h1>Un tableau de bord unique pour vos commandes.</h1>
+            <p>
+              Visualisez l’état de votre stock, préparez vos commandes et scannez vos colis lors du
+              retrait client en quelques secondes.
+            </p>
+            <div class="hero-actions">
+              <button type="button" class="hero-button primary" data-nav="inventory">
+                Gérer l’inventaire
+              </button>
+              <button type="button" class="hero-button secondary" data-nav="pickup">
+                Passer en mode retrait
+              </button>
+            </div>
+          </div>
+          <div class="hero-illustration">
+            <div class="hero-card">
+              <span class="material-symbols-rounded">qr_code_scanner</span>
+              <p>Scan instantané</p>
+              <small>Connectez un lecteur code-barres ou utilisez la caméra.</small>
+            </div>
+            <div class="hero-card">
+              <span class="material-symbols-rounded">local_shipping</span>
+              <p>Suivi précis</p>
+              <small>Statuts mis à jour à chaque étape de préparation.</small>
+            </div>
+          </div>
+        </div>
+        <div class="home-stats">
+          <article class="stat-card">
+            <span class="stat-label">Produits actifs</span>
+            <h3 id="statProductsCount">0</h3>
+            <p>Articles disponibles dans votre catalogue.</p>
+          </article>
+          <article class="stat-card">
+            <span class="stat-label">Commandes ouvertes</span>
+            <h3 id="statOrdersOpen">0</h3>
+            <p>Commandes à préparer ou en cours de livraison.</p>
+          </article>
+          <article class="stat-card">
+            <span class="stat-label">Prêtes au retrait</span>
+            <h3 id="statPickupReady">0</h3>
+            <p>Colis en attente de remise au client.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="page" data-page="inventory">
+        <div class="page-header">
           <div>
             <h2>Inventaire produits</h2>
-            <p>Centralisez vos références et générez un code-barres unique.</p>
+            <p>Ajoutez vos références, visuels et codes-barres.</p>
           </div>
           <button class="secondary" id="exportProductsBtn">Exporter CSV</button>
-        </header>
-        <form id="productForm" class="form-grid">
-          <div class="field">
-            <label for="productName">Nom du produit</label>
-            <input type="text" id="productName" name="name" required />
-          </div>
-          <div class="field">
-            <label for="productSku">Code-barres / SKU</label>
-            <div class="input-with-button">
-              <input type="text" id="productSku" name="sku" placeholder="Ex. 1234567890123" required />
-              <button type="button" class="secondary icon-text compact-button" id="scanSkuBtn">
-                <span class="material-symbols-rounded">qr_code_scanner</span>
-                Scanner
-              </button>
+        </div>
+        <section class="panel">
+          <form id="productForm" class="form-grid">
+            <div class="field">
+              <label for="productName">Nom du produit</label>
+              <input type="text" id="productName" name="name" required />
             </div>
-            <small class="field-hint">Utilisez un lecteur code-barres ou cliquez sur “Scanner”.</small>
-          </div>
-          <div class="field">
-            <label for="productImage">Image du produit</label>
-            <div class="image-input">
-              <input type="file" id="productImage" name="image" accept="image/*" />
-              <button type="button" class="secondary compact-button" id="productImageClear" disabled>
-                <span class="material-symbols-rounded">close</span>
-                Retirer
-              </button>
+            <div class="field">
+              <label for="productSku">Code-barres / SKU</label>
+              <div class="input-with-button">
+                <input type="text" id="productSku" name="sku" placeholder="Ex. 1234567890123" required />
+                <button type="button" class="secondary icon-text compact-button" id="scanSkuBtn">
+                  <span class="material-symbols-rounded">qr_code_scanner</span>
+                  Scanner
+                </button>
+              </div>
+              <small class="field-hint">Utilisez un lecteur code-barres ou cliquez sur “Scanner”.</small>
             </div>
-            <small class="field-hint">Optionnel : ajoutez une photo pour l’inventaire et les fiches produit.</small>
-            <div class="image-preview" id="productImagePreview">
-              <div class="image-preview-placeholder">
-                <span class="material-symbols-rounded">image</span>
-                <p>Aucune image sélectionnée</p>
+            <div class="field">
+              <label for="productImage">Image du produit</label>
+              <div class="image-input">
+                <input type="file" id="productImage" name="image" accept="image/*" />
+                <button type="button" class="secondary compact-button" id="productImageClear" disabled>
+                  <span class="material-symbols-rounded">close</span>
+                  Retirer
+                </button>
+              </div>
+              <small class="field-hint">
+                Optionnel : ajoutez une photo pour l’inventaire et les fiches produit.
+              </small>
+              <div class="image-preview" id="productImagePreview">
+                <div class="image-preview-placeholder">
+                  <span class="material-symbols-rounded">image</span>
+                  <p>Aucune image sélectionnée</p>
+                </div>
               </div>
             </div>
+            <div class="field">
+              <label for="productPrice">Prix (€)</label>
+              <input type="number" step="0.01" min="0" id="productPrice" name="price" required />
+            </div>
+            <div class="field">
+              <label for="productStock">Stock</label>
+              <input type="number" min="0" id="productStock" name="stock" required />
+            </div>
+            <div class="field field-full">
+              <label for="productDescription">Description</label>
+              <textarea
+                id="productDescription"
+                name="description"
+                rows="2"
+                placeholder="Détails, variantes, conditionnement..."
+              ></textarea>
+            </div>
+            <div class="form-actions">
+              <button type="reset" class="secondary">Effacer</button>
+              <button type="submit">Ajouter le produit</button>
+            </div>
+          </form>
+        </section>
+        <section class="panel">
+          <div class="table-wrapper">
+            <table id="productsTable">
+              <thead>
+                <tr>
+                  <th>Produit</th>
+                  <th>Code-barres</th>
+                  <th>Stock</th>
+                  <th>Prix</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+            <p class="empty-state" id="productsEmptyState">
+              Aucun produit pour le moment. Ajoutez votre premier article ci-dessus.
+            </p>
           </div>
-          <div class="field">
-            <label for="productPrice">Prix (€)</label>
-            <input type="number" step="0.01" min="0" id="productPrice" name="price" required />
-          </div>
-          <div class="field">
-            <label for="productStock">Stock</label>
-            <input type="number" min="0" id="productStock" name="stock" required />
-          </div>
-          <div class="field field-full">
-            <label for="productDescription">Description</label>
-            <textarea id="productDescription" name="description" rows="2" placeholder="Details, variantes, etc."></textarea>
-          </div>
-          <div class="form-actions">
-            <button type="reset" class="secondary">Effacer</button>
-            <button type="submit">Ajouter le produit</button>
-          </div>
-        </form>
-        <div class="table-wrapper">
-          <table id="productsTable">
-            <thead>
-              <tr>
-                <th>Produit</th>
-                <th>Code-barres</th>
-                <th>Stock</th>
-                <th>Prix</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-          <p class="empty-state" id="productsEmptyState">
-            Aucun produit pour le moment. Ajoutez votre premier article ci-dessus.
-          </p>
-        </div>
+        </section>
       </section>
 
-      <section class="panel">
-        <header class="panel-header">
+      <section class="page" data-page="orders">
+        <div class="page-header">
           <div>
-            <h2>Commandes</h2>
-            <p>Créez vos commandes et suivez leur statut en temps réel.</p>
+            <h2>Gestion des commandes</h2>
+            <p>Créez, suivez et mettez à jour vos statuts en temps réel.</p>
           </div>
           <button class="secondary" id="exportOrdersBtn">Exporter CSV</button>
-        </header>
-        <form id="orderForm" class="form-grid">
-          <div class="field">
-            <label for="orderProduct">Produit</label>
-            <select id="orderProduct" required></select>
-          </div>
-          <div class="field">
-            <label for="orderQuantity">Quantité</label>
-            <input type="number" min="1" id="orderQuantity" required />
-          </div>
-          <div class="field">
-            <label for="orderCustomer">Client</label>
-            <input type="text" id="orderCustomer" placeholder="Nom du client" required />
-          </div>
-          <div class="field">
-            <label for="orderNotes">Notes</label>
-            <input type="text" id="orderNotes" placeholder="Optionnel" />
-          </div>
-          <div class="form-actions">
-            <button type="reset" class="secondary">Réinitialiser</button>
-            <button type="submit">Créer la commande</button>
-          </div>
-        </form>
-        <div class="table-wrapper">
-          <table id="ordersTable">
-            <thead>
-              <tr>
-                <th>#Commande</th>
-                <th>Produit</th>
-                <th>Client</th>
-                <th>Statut</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-          <p class="empty-state" id="ordersEmptyState">
-            Pas encore de commandes. Ajoutez-en une pour commencer le suivi.
-          </p>
         </div>
+        <section class="panel">
+          <form id="orderForm" class="form-grid">
+            <div class="field">
+              <label for="orderProduct">Produit</label>
+              <select id="orderProduct" required></select>
+            </div>
+            <div class="field">
+              <label for="orderQuantity">Quantité</label>
+              <input type="number" min="1" id="orderQuantity" required />
+            </div>
+            <div class="field">
+              <label for="orderCustomer">Client</label>
+              <input type="text" id="orderCustomer" placeholder="Nom du client" required />
+            </div>
+            <div class="field">
+              <label for="orderNotes">Notes</label>
+              <input type="text" id="orderNotes" placeholder="Optionnel" />
+            </div>
+            <div class="form-actions">
+              <button type="reset" class="secondary">Réinitialiser</button>
+              <button type="submit">Créer la commande</button>
+            </div>
+          </form>
+        </section>
+        <section class="panel">
+          <div class="table-wrapper">
+            <table id="ordersTable">
+              <thead>
+                <tr>
+                  <th>#Commande</th>
+                  <th>Produit</th>
+                  <th>Client</th>
+                  <th>Statut</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+            <p class="empty-state" id="ordersEmptyState">
+              Pas encore de commandes. Ajoutez-en une pour commencer le suivi.
+            </p>
+          </div>
+        </section>
       </section>
 
-      <section class="panel panel-scan">
-        <header class="panel-header">
+      <section class="page" data-page="pickup">
+        <div class="page-header">
           <div>
-            <h2>Scanner un code-barres</h2>
-            <p>Scannez ou saisissez un code-barres pour accéder à la fiche produit.</p>
+            <h2>Retrait client</h2>
+            <p>Scannez le colis au comptoir pour vérifier et remettre le paquet.</p>
           </div>
           <button class="secondary" id="clearScanResults">Effacer</button>
-        </header>
-        <form id="scanForm" class="scan-form">
-          <label for="scanInput" class="scan-label">Code-barres</label>
-          <input
-            type="text"
-            id="scanInput"
-            placeholder="Utilisez un lecteur code-barres ou tapez le code puis Entrée"
-            autofocus
-          />
-        </form>
-        <div class="scan-result" id="scanResult">
-          <p class="empty-state">Scannez un produit pour voir les informations détaillées.</p>
         </div>
+        <section class="panel panel-scan">
+          <form id="scanForm" class="scan-form" data-mode="pickup">
+            <label for="scanInput" class="scan-label">Code-barres produit ou commande</label>
+            <input
+              type="text"
+              id="scanInput"
+              placeholder="Scannez le colis ou tapez le code"
+              autofocus
+            />
+          </form>
+          <div class="scan-result" id="scanResult" data-context="pickup">
+            <p class="empty-state">
+              Scannez un colis pour afficher le détail produit et mettre à jour le statut.
+            </p>
+          </div>
+        </section>
       </section>
     </main>
 

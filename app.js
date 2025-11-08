@@ -7,6 +7,8 @@ const STATUS_OPTIONS = [
   "Livré",
   "En attente",
   "Annulé",
+  "Prêt pour retrait",
+  "Remis au client",
 ];
 
 const state = {
@@ -50,6 +52,12 @@ const elements = {
   exportOrdersBtn: document.querySelector("#exportOrdersBtn"),
   themeToggle: document.querySelector("#themeToggle"),
   themeLabel: document.querySelector("#themeLabel"),
+  pages: document.querySelectorAll("[data-page]"),
+  navTriggers: document.querySelectorAll("[data-nav]"),
+  navLinks: document.querySelectorAll(".nav-link"),
+  homeProductsCount: document.querySelector("#statProductsCount"),
+  homeOrdersOpen: document.querySelector("#statOrdersOpen"),
+  homePickupReady: document.querySelector("#statPickupReady"),
 };
 
 const cameraState = {
@@ -82,6 +90,7 @@ const IMAGE_PREVIEW_PLACEHOLDER = `
 
 let pendingProductImageData = null;
 let pendingProductImageName = null;
+let currentScanMode = "pickup";
 
 function getProductInitial(name) {
   if (!name) return "?";
@@ -117,6 +126,40 @@ function toggleTheme() {
   document.documentElement.classList.toggle("dark", isDark);
   elements.themeLabel.textContent = isDark ? "Mode clair" : "Mode sombre";
   window.localStorage.setItem(THEME_KEY, isDark ? "dark" : "light");
+}
+
+function setActivePage(pageId) {
+  if (!pageId) return;
+  elements.pages?.forEach((section) => {
+    section.classList.toggle("active", section.dataset.page === pageId);
+  });
+  elements.navLinks?.forEach((link) => {
+    link.classList.toggle("active", link.dataset.nav === pageId);
+  });
+  currentScanMode = pageId === "pickup" ? "pickup" : "inventory";
+  if (pageId === "pickup") {
+    clearScan();
+    setTimeout(() => {
+      elements.scanInput?.focus();
+    }, 150);
+  }
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function updateHomeStats() {
+  if (elements.homeProductsCount) {
+    elements.homeProductsCount.textContent = state.products.length.toString();
+  }
+  if (elements.homeOrdersOpen) {
+    const openOrders = state.orders.filter(
+      (order) => !["Livré", "Annulé", "Remis au client"].includes(order.status),
+    ).length;
+    elements.homeOrdersOpen.textContent = openOrders.toString();
+  }
+  if (elements.homePickupReady) {
+    const ready = state.orders.filter((order) => order.status === "Prêt pour retrait").length;
+    elements.homePickupReady.textContent = ready.toString();
+  }
 }
 
 function formatCurrency(value) {
@@ -225,6 +268,7 @@ function renderProducts() {
 
       elements.productTableBody.appendChild(row);
     });
+  updateHomeStats();
 }
 
 function renderOrders() {
@@ -275,6 +319,7 @@ function renderOrders() {
 
       elements.orderTableBody.appendChild(row);
     });
+  updateHomeStats();
 }
 
 function deleteProduct(productId) {
@@ -358,7 +403,9 @@ function handleProductSubmit(event) {
   event.target.reset();
   handleProductImageClear();
   elements.scanInput.value = product.sku;
-  showScanCard(product);
+  if (currentScanMode === "pickup") {
+    showScanCard(product, undefined, "pickup");
+  }
 }
 
 function handleOrderSubmit(event) {
@@ -397,15 +444,16 @@ function updateOrderStatus(orderId, status) {
   renderOrders();
 
   const product = state.products.find((item) => item.id === order.productId);
-  if (product) {
-    showScanCard(product, order);
+  if (product && currentScanMode === "pickup") {
+    showScanCard(product, order, "pickup");
   }
 }
 
-function showScanCard(product, order = null) {
+function showScanCard(product, order = null, mode = "inventory") {
   elements.scanResult.innerHTML = "";
   const card = document.createElement("div");
   card.className = "scan-card";
+  card.dataset.mode = mode;
 
   const header = document.createElement("div");
   header.className = "scan-card-header";
@@ -456,6 +504,56 @@ function showScanCard(product, order = null) {
     card.append(status);
   }
 
+  if (mode === "pickup") {
+    const pickupBlock = document.createElement("div");
+    pickupBlock.className = "scan-card-pickup";
+    if (order) {
+      const orderInfo = document.createElement("div");
+      orderInfo.className = "scan-card-order";
+      orderInfo.innerHTML = `
+        <span><strong>Commande :</strong> ${order.reference}</span>
+        <span><strong>Client :</strong> ${order.customer}</span>
+        <span><strong>Quantité :</strong> ${order.quantity}</span>
+        <span><strong>Montant :</strong> ${formatCurrency(order.quantity * product.price)}</span>
+      `;
+
+      const actions = document.createElement("div");
+      actions.className = "scan-card-actions";
+
+      if (order.status !== "Prêt pour retrait" && order.status !== "Remis au client") {
+        const readyBtn = document.createElement("button");
+        readyBtn.type = "button";
+        readyBtn.className = "secondary";
+        readyBtn.textContent = "Marquer prêt au retrait";
+        readyBtn.addEventListener("click", () => {
+          updateOrderStatus(order.id, "Prêt pour retrait");
+        });
+        actions.append(readyBtn);
+      }
+
+      if (order.status !== "Remis au client") {
+        const deliverBtn = document.createElement("button");
+        deliverBtn.type = "button";
+        deliverBtn.textContent = "Remettre au client";
+        deliverBtn.addEventListener("click", () => {
+          updateOrderStatus(order.id, "Remis au client");
+        });
+        actions.append(deliverBtn);
+      }
+
+      pickupBlock.append(orderInfo);
+      pickupBlock.append(actions);
+    } else {
+      pickupBlock.innerHTML = `
+        <div class="scan-card-empty">
+          <span class="material-symbols-rounded">info</span>
+          <p>Aucune commande active trouvée pour ce produit.</p>
+        </div>
+      `;
+    }
+    card.append(pickupBlock);
+  }
+
   const actions = document.createElement("div");
   actions.className = "form-actions";
   const openDrawerBtn = document.createElement("button");
@@ -473,24 +571,44 @@ function showScanCard(product, order = null) {
 
 function handleScanSubmit(event) {
   event.preventDefault();
+  const mode = event.currentTarget.dataset.mode ?? "inventory";
+  currentScanMode = mode;
   const code = elements.scanInput.value.trim();
   if (!code) return;
-  const product = state.products.find((item) => item.sku === code);
+
+  let product = state.products.find((item) => item.sku === code);
+  let relatedOrder = null;
+
   if (!product) {
-    elements.scanResult.innerHTML = `<p class="empty-state">Aucun produit trouvé pour le code ${code}.</p>`;
+    const orderByReference = state.orders.find((order) => order.reference === code);
+    if (orderByReference) {
+      relatedOrder = orderByReference;
+      product = state.products.find((item) => item.id === orderByReference.productId);
+    }
+  }
+
+  if (!product) {
+    elements.scanResult.innerHTML = `<p class="empty-state">Aucun produit ou commande trouvé pour le code ${code}.</p>`;
     return;
   }
 
-  const relatedOrder = state.orders.find(
-    (order) => order.productId === product.id && order.status !== "Livré",
-  );
-  showScanCard(product, relatedOrder ?? undefined);
+  if (!relatedOrder) {
+    const candidates = state.orders
+      .filter((order) => order.productId === product.id)
+      .sort((a, b) => b.createdAt - a.createdAt);
+    relatedOrder =
+      mode === "pickup"
+        ? candidates.find((order) => !["Remis au client", "Annulé"].includes(order.status))
+        : candidates.find((order) => order.status !== "Livré");
+  }
+
+  showScanCard(product, relatedOrder ?? undefined, mode);
 }
 
 function clearScan() {
   elements.scanInput.value = "";
   elements.scanResult.innerHTML =
-    '<p class="empty-state">Scannez un produit pour voir les informations détaillées.</p>';
+    '<p class="empty-state">Scannez un colis pour afficher les informations produit et commande.</p>';
 }
 
 function resetProductImagePreview() {
@@ -865,6 +983,14 @@ function attachEventListeners() {
     }
   });
   elements.scanModalForm?.addEventListener("submit", handleSkuScanSubmit);
+  elements.navTriggers?.forEach((trigger) => {
+    trigger.addEventListener("click", () => {
+      const target = trigger.dataset.nav;
+      if (target) {
+        setActivePage(target);
+      }
+    });
+  });
 
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
@@ -883,6 +1009,7 @@ function hydrateUI() {
   renderProductOptions();
   clearScan();
   resetProductImagePreview();
+  setActivePage("home");
 }
 
 function init() {
