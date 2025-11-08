@@ -670,6 +670,17 @@ function openSkuScanner() {
   if (!elements.scanModalOverlay) return;
   elements.scanModalOverlay.classList.add("visible");
   elements.scanModalInput.value = "";
+  if (elements.scanModalStatus) {
+    elements.scanModalStatus.textContent = "Initialisation de la caméra...";
+  }
+  if (elements.scanModalVideo) {
+    elements.scanModalVideo.innerHTML = `
+      <div class="scanner-placeholder">
+        <span class="material-symbols-rounded">videocam</span>
+        <p>Scanner en attente...</p>
+      </div>
+    `;
+  }
   setTimeout(() => {
     elements.scanModalInput.focus();
   }, 20);
