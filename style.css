@@ -371,6 +371,46 @@ input:checked + .slider::before {
   margin: 0;
 }
 
+.orders-overview {
+  display: grid;
+  gap: 18px;
+}
+
+.order-search {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+}
+
+.order-search label {
+  font-weight: 600;
+  color: var(--text);
+  grid-column: 1 / -1;
+}
+
+.order-search input {
+  padding: 12px;
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--border);
+  background: var(--bg-panel-alt);
+  font-size: 15px;
+  width: 100%;
+}
+
+.orders-legend {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.orders-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .panel {
   background: var(--bg-panel);
   border-radius: var(--radius);
@@ -844,6 +884,32 @@ textarea:focus {
   background: var(--accent-strong);
 }
 
+.scan-card-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.scan-card-items li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  background: var(--bg-panel-alt);
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--border);
+  padding: 10px 14px;
+  color: var(--text);
+}
+
+.scan-card-total {
+  margin: 0;
+  font-weight: 600;
+  color: var(--accent-strong);
+}
+
 .scan-card-empty {
   display: grid;
   gap: 8px;
@@ -978,6 +1044,27 @@ textarea:focus {
   gap: 12px;
 }
 
+.drawer-order-items {
+  list-style: none;
+  margin: 8px 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.drawer-order-items li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  background: var(--bg-panel-alt);
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--border);
+  padding: 8px 10px;
+}
+
 .drawer-section dl {
   display: grid;
   grid-template-columns: max-content 1fr;
@@ -1110,6 +1197,10 @@ textarea:focus {
     width: 100%;
     flex-wrap: wrap;
     justify-content: flex-start;
+  }
+
+  .order-search {
+    grid-template-columns: 1fr;
   }
 
   .form-actions {

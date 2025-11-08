@@ -2,10 +2,10 @@ const STORAGE_KEY = "gestionCommandesState_v1";
 const THEME_KEY = "gestionCommandesTheme_v1";
 
 const STATUS_OPTIONS = [
+  "En attente",
   "En préparation",
   "En cours de livraison",
   "Livré",
-  "En attente",
   "Annulé",
   "Prêt pour retrait",
   "Remis au client",
@@ -24,13 +24,11 @@ const elements = {
   productImageClear: document.querySelector("#productImageClear"),
   productTableBody: document.querySelector("#productsTable tbody"),
   productsEmptyState: document.querySelector("#productsEmptyState"),
-  orderForm: document.querySelector("#orderForm"),
-  orderProductSelect: document.querySelector("#orderProduct"),
-  orderQuantity: document.querySelector("#orderQuantity"),
-  orderCustomer: document.querySelector("#orderCustomer"),
-  orderNotes: document.querySelector("#orderNotes"),
   orderTableBody: document.querySelector("#ordersTable tbody"),
   ordersEmptyState: document.querySelector("#ordersEmptyState"),
+  orderSearchForm: document.querySelector("#orderSearchForm"),
+  orderSearchInput: document.querySelector("#orderSearchInput"),
+  orderSearchReset: document.querySelector("#orderSearchReset"),
   scanForm: document.querySelector("#scanForm"),
   scanInput: document.querySelector("#scanInput"),
   scanResult: document.querySelector("#scanResult"),
@@ -98,6 +96,7 @@ let pendingProductImageData = null;
 let pendingProductImageName = null;
 let currentScanMode = "pickup";
 let activeScanTarget = null;
+let orderSearchTerm = "";
 
 function getProductInitial(name) {
   if (!name) return "?";
@@ -169,6 +168,41 @@ function updateHomeStats() {
   }
 }
 
+function matchesOrder(order, term) {
+  if (!term) return true;
+  const normalizedTerm = term.toLowerCase();
+  const fields = [
+    order.reference,
+    order.customer,
+    order.email,
+    order.notes,
+    order.productName,
+    order.productSku,
+  ];
+  if (Array.isArray(order.items)) {
+    order.items.forEach((item) => {
+      fields.push(item.productName, item.productSku);
+    });
+  }
+  const haystack = fields.filter(Boolean).join(" ").toLowerCase();
+  return haystack.includes(normalizedTerm);
+}
+
+function getOrderItems(order) {
+  if (Array.isArray(order?.items) && order.items.length) {
+    return order.items;
+  }
+  return [
+    {
+      productId: order.productId,
+      productName: order.productName,
+      productSku: order.productSku,
+      quantity: order.quantity ?? 0,
+      unitPrice: order.unitPrice ?? 0,
+    },
+  ];
+}
+
 function formatCurrency(value) {
   return new Intl.NumberFormat("fr-FR", {
     style: "currency",
@@ -189,35 +223,6 @@ function buildStatusSelect(select, selectedStatus) {
   });
 }
 
-function renderProductOptions() {
-  elements.orderProductSelect.innerHTML = "";
-  if (!state.products.length) {
-    const option = document.createElement("option");
-    option.value = "";
-    option.textContent = "Ajoutez d'abord un produit";
-    option.disabled = true;
-    option.selected = true;
-    elements.orderProductSelect.appendChild(option);
-    elements.orderProductSelect.disabled = true;
-    return;
-  }
-
-  const placeholder = document.createElement("option");
-  placeholder.value = "";
-  placeholder.textContent = "Choisissez un produit";
-  placeholder.disabled = true;
-  placeholder.selected = true;
-  elements.orderProductSelect.appendChild(placeholder);
-
-  state.products.forEach((product) => {
-    const option = document.createElement("option");
-    option.value = product.id;
-    option.textContent = `${product.name} • ${product.sku}`;
-    elements.orderProductSelect.appendChild(option);
-  });
-  elements.orderProductSelect.disabled = false;
-}
-
 function classifyStock(stock) {
   if (stock === 0) return "danger";
   if (stock <= 5) return "low";
@@ -228,6 +233,7 @@ function renderProducts() {
   elements.productTableBody.innerHTML = "";
   if (!state.products.length) {
     elements.productsEmptyState.classList.remove("hidden");
+    updateHomeStats();
     return;
   }
   elements.productsEmptyState.classList.add("hidden");
@@ -282,52 +288,80 @@ function renderProducts() {
 
 function renderOrders() {
   elements.orderTableBody.innerHTML = "";
-  if (!state.orders.length) {
+  const filteredOrders = state.orders
+    .slice()
+    .sort((a, b) => b.createdAt - a.createdAt)
+    .filter((order) => matchesOrder(order, orderSearchTerm));
+
+  if (!filteredOrders.length) {
+    if (orderSearchTerm) {
+      elements.ordersEmptyState.textContent = `Aucune commande ne correspond à « ${orderSearchTerm} ».`;
+    } else {
+      elements.ordersEmptyState.textContent =
+        "Pas encore de commandes. Les commandes client apparaîtront automatiquement ici.";
+    }
     elements.ordersEmptyState.classList.remove("hidden");
+    updateHomeStats();
     return;
   }
   elements.ordersEmptyState.classList.add("hidden");
 
-  state.orders
-    .slice()
-    .sort((a, b) => b.createdAt - a.createdAt)
-    .forEach((order) => {
-      const row = elements.orderRowTemplate.content.cloneNode(true);
-      row.querySelector(".item-title").textContent = order.reference;
-      row.querySelector(".item-date").textContent = new Intl.DateTimeFormat("fr-FR", {
-        dateStyle: "medium",
-        timeStyle: "short",
-      }).format(order.createdAt);
+  filteredOrders.forEach((order) => {
+    const row = elements.orderRowTemplate.content.cloneNode(true);
+    const createdAt = order.createdAt
+      ? new Intl.DateTimeFormat("fr-FR", {
+          dateStyle: "medium",
+          timeStyle: "short",
+        }).format(order.createdAt)
+      : "Date inconnue";
 
-      row.querySelector(".item-product").textContent = order.productName;
-      row.querySelector(".item-quantity").textContent = `Quantité : ${order.quantity}`;
-      row.querySelector(".item-customer").textContent = order.customer;
-      row.querySelector(".item-notes").textContent = order.notes || "—";
+    const items = getOrderItems(order);
 
-      const select = row.querySelector(".status-select");
-      buildStatusSelect(select, order.status);
-      select.addEventListener("change", (event) => {
-        updateOrderStatus(order.id, event.target.value);
-      });
+    const itemsSummary = items
+      .map((item) => `${item.quantity ?? 0}× ${item.productName ?? "Produit"}`)
+      .slice(0, 2)
+      .join(", ");
+    const extraCount = items.length > 2 ? ` +${items.length - 2}` : "";
+    const totalQuantity = items.reduce((sum, item) => sum + (item.quantity ?? 0), 0);
+    const totalAmount =
+      order.total ??
+      items.reduce((sum, item) => sum + (item.unitPrice ?? 0) * (item.quantity ?? 0), 0);
 
-      row.querySelector(".icon-button.focus-product").addEventListener("click", () => {
-        const product = state.products.find((p) => p.id === order.productId);
-        if (product) {
-          showScanCard(product, order);
-          openProductDrawer(product, order);
-        } else {
-          alert("Produit introuvable. Il a peut-être été supprimé.");
-        }
-      });
+    row.querySelector(".item-title").textContent = order.reference || order.id;
+    row.querySelector(".item-date").textContent = createdAt;
 
-      row.querySelector(".icon-button.delete").addEventListener("click", () => {
-        if (confirm(`Supprimer la commande ${order.reference} ?`)) {
-          deleteOrder(order.id);
-        }
-      });
+    row.querySelector(".item-product").textContent = `${itemsSummary}${extraCount}`;
+    row.querySelector(".item-quantity").textContent = `${totalQuantity} article${
+      totalQuantity > 1 ? "s" : ""
+    } • ${formatCurrency(totalAmount)}`;
+    row.querySelector(".item-customer").textContent = order.customer || "Client inconnu";
+    const details = [order.email, order.notes].filter(Boolean).join(" • ") || "—";
+    row.querySelector(".item-notes").textContent = details;
 
-      elements.orderTableBody.appendChild(row);
+    const select = row.querySelector(".status-select");
+    buildStatusSelect(select, order.status);
+    select.addEventListener("change", (event) => {
+      updateOrderStatus(order.id, event.target.value);
     });
+
+    row.querySelector(".icon-button.focus-product").addEventListener("click", () => {
+      const product = state.products.find((p) => p.id === order.productId);
+      if (product) {
+        showScanCard(product, order);
+        openProductDrawer(product, order);
+      } else {
+        alert("Produit introuvable. Il a peut-être été supprimé.");
+      }
+    });
+
+    row.querySelector(".icon-button.delete").addEventListener("click", () => {
+      if (confirm(`Supprimer la commande ${order.reference} ?`)) {
+        deleteOrder(order.id);
+      }
+    });
+
+    elements.orderTableBody.appendChild(row);
+  });
   updateHomeStats();
 }
 
@@ -335,7 +369,6 @@ function deleteProduct(productId) {
   state.products = state.products.filter((product) => product.id !== productId);
   saveState();
   renderProducts();
-  renderProductOptions();
 }
 
 function deleteOrder(orderId) {
@@ -366,36 +399,6 @@ function createProduct(formData) {
   };
 }
 
-function createOrder({ productId, quantity, customer, notes }) {
-  const product = state.products.find((item) => item.id === productId);
-  if (!product) throw new Error("Produit introuvable");
-
-  const reference = `CMD-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${(
-    Math.random() * 10000
-  )
-    .toFixed(0)
-    .padStart(4, "0")}`;
-
-  return {
-    id: generateId("ord"),
-    productId: product.id,
-    productSku: product.sku,
-    productName: product.name,
-    quantity,
-    customer,
-    notes,
-    status: "En préparation",
-    createdAt: Date.now(),
-    history: [
-      {
-        status: "En préparation",
-        date: Date.now(),
-        note: "Création de la commande",
-      },
-    ],
-  };
-}
-
 function handleProductSubmit(event) {
   event.preventDefault();
   const formData = new FormData(event.target);
@@ -408,49 +411,12 @@ function handleProductSubmit(event) {
   state.products.push(product);
   saveState();
   renderProducts();
-  renderProductOptions();
-  updateHomeStats();
   event.target.reset();
   handleProductImageClear();
   elements.scanInput.value = product.sku;
   if (currentScanMode === "pickup") {
     showScanCard(product, undefined, "pickup");
   }
-}
-
-function handleOrderSubmit(event) {
-  event.preventDefault();
-  const form = event.currentTarget;
-  const productSelect = elements.orderProductSelect ?? form.querySelector("#orderProduct");
-  const quantityInput = elements.orderQuantity ?? form.querySelector("#orderQuantity");
-  const customerInput = elements.orderCustomer ?? form.querySelector("#orderCustomer");
-  const notesInput = elements.orderNotes ?? form.querySelector("#orderNotes");
-
-  if (!productSelect || !quantityInput || !customerInput || !notesInput) {
-    console.error("Formulaire de commande introuvable ou incomplet.");
-    return;
-  }
-
-  const productId = productSelect.value;
-  if (!productId) {
-    alert("Sélectionnez un produit.");
-    return;
-  }
-  const quantity = Number.parseInt(quantityInput.value, 10);
-  if (!Number.isInteger(quantity) || quantity <= 0) {
-    alert("La quantité doit être un nombre positif.");
-    return;
-  }
-  const customer = customerInput.value.trim();
-  const notes = notesInput.value.trim();
-
-  const order = createOrder({ productId, quantity, customer, notes });
-  state.orders.push(order);
-  saveState();
-  renderOrders();
-  updateHomeStats();
-  form.reset();
-  productSelect.value = "";
 }
 
 function updateOrderStatus(orderId, status) {
@@ -530,14 +496,31 @@ function showScanCard(product, order = null, mode = "inventory") {
     const pickupBlock = document.createElement("div");
     pickupBlock.className = "scan-card-pickup";
     if (order) {
+      const items = getOrderItems(order);
+      const totalAmount =
+        order.total ??
+        items.reduce((sum, item) => sum + (item.unitPrice ?? product.price ?? 0) * (item.quantity ?? 0), 0);
       const orderInfo = document.createElement("div");
       orderInfo.className = "scan-card-order";
       orderInfo.innerHTML = `
         <span><strong>Commande :</strong> ${order.reference}</span>
-        <span><strong>Client :</strong> ${order.customer}</span>
-        <span><strong>Quantité :</strong> ${order.quantity}</span>
-        <span><strong>Montant :</strong> ${formatCurrency(order.quantity * product.price)}</span>
+        <span><strong>Client :</strong> ${order.customer || "—"}</span>
+        <span><strong>Email :</strong> ${order.email || "—"}</span>
       `;
+
+      const itemsList = document.createElement("ul");
+      itemsList.className = "scan-card-items";
+      items.forEach((item) => {
+        const li = document.createElement("li");
+        const amount =
+          (item.unitPrice ?? product.price ?? 0) * Math.max(item.quantity ?? 0, 0);
+        li.innerHTML = `<span>${item.quantity ?? 0} × ${item.productName ?? product.name}</span><strong>${formatCurrency(amount)}</strong>`;
+        itemsList.appendChild(li);
+      });
+
+      const totalLine = document.createElement("p");
+      totalLine.className = "scan-card-total";
+      totalLine.innerHTML = `<strong>Total :</strong> ${formatCurrency(totalAmount)}`;
 
       const actions = document.createElement("div");
       actions.className = "scan-card-actions";
@@ -564,6 +547,8 @@ function showScanCard(product, order = null, mode = "inventory") {
       }
 
       pickupBlock.append(orderInfo);
+      pickupBlock.append(itemsList);
+      pickupBlock.append(totalLine);
       pickupBlock.append(actions);
     } else {
       pickupBlock.innerHTML = `
@@ -942,22 +927,46 @@ function openProductDrawer(product, order) {
       <h4>Commandes liées (${productOrders.length})</h4>
       <div class="drawer-orders">
         ${productOrders
-          .map(
-            (ord) => `
+          .map((ord) => {
+            const items = getOrderItems(ord);
+            const itemsList = items
+              .map(
+                (item) => `
+                  <li>
+                    <span>${item.quantity ?? 0} × ${item.productName ?? "Produit"}</span>
+                    <strong>${formatCurrency(
+                      (item.unitPrice ?? product.price ?? 0) * (item.quantity ?? 0),
+                    )}</strong>
+                  </li>
+                `,
+              )
+              .join("");
+            const totalAmount =
+              ord.total ??
+              items.reduce(
+                (sum, item) =>
+                  sum + (item.unitPrice ?? product.price ?? 0) * (item.quantity ?? 0),
+                0,
+              );
+            return `
               <article class="drawer-order">
                 <header>
                   <strong>${ord.reference}</strong>
                   <span class="status-chip" data-status="${ord.status}">${ord.status}</span>
                 </header>
-                <p>Quantité : ${ord.quantity} • Client : ${ord.customer}</p>
+                <p>Client : ${ord.customer || "—"} • Email : ${ord.email || "—"}</p>
+                <ul class="drawer-order-items">
+                  ${itemsList}
+                </ul>
+                <p><strong>Total :</strong> ${formatCurrency(totalAmount)}</p>
                 <p>Notes : ${ord.notes || "—"}</p>
                 <small>Créée le ${new Intl.DateTimeFormat("fr-FR", {
                   dateStyle: "medium",
                   timeStyle: "short",
                 }).format(ord.createdAt)}</small>
               </article>
-            `,
-          )
+            `;
+          })
           .join("")}
       </div>
     `;
@@ -1027,24 +1036,30 @@ function exportProducts() {
 
 function exportOrders() {
   exportCSV(
-    state.orders.map((order) => ({
-      id: order.id,
-      reference: order.reference,
-      produit: order.productName,
-      code_barres: order.productSku,
-      quantite: order.quantity,
-      client: order.customer,
-      notes: order.notes,
-      statut: order.status,
-      cree_le: new Date(order.createdAt).toISOString(),
-    })),
+    state.orders.map((order) => {
+      const items = getOrderItems(order);
+      const totalQuantity = items.reduce((sum, item) => sum + (item.quantity ?? 0), 0);
+      const totalAmount =
+        order.total ??
+        items.reduce((sum, item) => sum + (item.unitPrice ?? 0) * (item.quantity ?? 0), 0);
+
+      return {
+        id: order.id,
+        reference: order.reference,
+        client: order.customer,
+        email: order.email ?? "",
+        statut: order.status,
+        total_articles: totalQuantity,
+        montant_estime: totalAmount,
+        cree_le: new Date(order.createdAt).toISOString(),
+      };
+    }),
     `commandes-${new Date().toISOString().slice(0, 10)}.csv`,
   );
 }
 
 function attachEventListeners() {
   elements.productForm?.addEventListener("submit", handleProductSubmit);
-  elements.orderForm?.addEventListener("submit", handleOrderSubmit);
   elements.scanForm?.addEventListener("submit", handleScanSubmit);
   elements.clearScanResults?.addEventListener("click", clearScan);
   elements.drawerClose?.addEventListener("click", closeDrawer);
@@ -1056,6 +1071,21 @@ function attachEventListeners() {
   elements.productImageClear?.addEventListener("click", handleProductImageClear);
   elements.scanSkuBtn?.addEventListener("click", () => openSkuScanner(elements.productSkuInput));
   elements.pickupScanBtn?.addEventListener("click", () => openSkuScanner(elements.scanInput));
+  elements.orderSearchForm?.addEventListener("submit", (event) => {
+    event.preventDefault();
+  });
+  elements.orderSearchInput?.addEventListener("input", (event) => {
+    orderSearchTerm = event.target.value.trim();
+    renderOrders();
+  });
+  elements.orderSearchReset?.addEventListener("click", (event) => {
+    event.preventDefault();
+    orderSearchTerm = "";
+    if (elements.orderSearchInput) {
+      elements.orderSearchInput.value = "";
+    }
+    renderOrders();
+  });
   elements.scanModalClose?.addEventListener("click", closeSkuScanner);
   elements.scanModalCancel?.addEventListener("click", closeSkuScanner);
   elements.scanModalOverlay?.addEventListener("click", (event) => {
@@ -1087,7 +1117,6 @@ function attachEventListeners() {
 function hydrateUI() {
   renderProducts();
   renderOrders();
-  renderProductOptions();
   clearScan();
   resetProductImagePreview();
   setActivePage("home");
