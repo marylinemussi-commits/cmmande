@@ -181,6 +181,20 @@ function renderProducts() {
       stockBadge.classList.add(classifyStock(product.stock));
       row.querySelector(".price").textContent = formatCurrency(product.price);
 
+      const thumbImg = row.querySelector(".product-thumb");
+      const thumbFallback = row.querySelector(".product-thumb-fallback");
+      if (product.image?.dataUrl) {
+        thumbImg.src = product.image.dataUrl;
+        thumbImg.alt = product.image.name || product.name;
+        thumbImg.style.display = "block";
+        thumbFallback.classList.add("hidden");
+      } else {
+        thumbImg.removeAttribute("src");
+        thumbImg.style.display = "none";
+        thumbFallback.textContent = getProductInitial(product.name);
+        thumbFallback.classList.remove("hidden");
+      }
+
       row.querySelector(".icon-button.view").addEventListener("click", () => {
         openProductDrawer(product);
       });
@@ -328,6 +342,7 @@ function handleProductSubmit(event) {
   renderProducts();
   renderProductOptions();
   event.target.reset();
+  handleProductImageClear();
   elements.scanInput.value = product.sku;
   showScanCard(product);
 }
@@ -389,6 +404,14 @@ function showScanCard(product, order = null) {
   badge.textContent = `${product.stock} en stock`;
 
   header.append(title, badge);
+  card.append(header);
+
+  if (product.image?.dataUrl) {
+    const media = document.createElement("div");
+    media.className = "scan-card-media";
+    media.innerHTML = `<img src="${product.image.dataUrl}" alt="${product.image.name || product.name}" />`;
+    card.append(media);
+  }
 
   const meta = document.createElement("div");
   meta.className = "meta";
@@ -401,7 +424,7 @@ function showScanCard(product, order = null) {
     }).format(product.createdAt)}</span>
   `;
 
-  card.append(header, meta);
+  card.append(meta);
 
   if (order) {
     const status = document.createElement("div");
@@ -678,19 +701,31 @@ function openProductDrawer(product, order) {
   productSection.className = "drawer-section";
   productSection.innerHTML = `
     <h4>Fiche produit</h4>
-    <dl>
-      <dt>Stock</dt>
-      <dd>${product.stock}</dd>
-      <dt>Prix</dt>
-      <dd>${formatCurrency(product.price)}</dd>
-      <dt>Description</dt>
-      <dd>${product.description || "—"}</dd>
-      <dt>Date d'ajout</dt>
-      <dd>${new Intl.DateTimeFormat("fr-FR", {
-        dateStyle: "medium",
-        timeStyle: "short",
-      }).format(product.createdAt)}</dd>
-    </dl>
+    <div class="drawer-product">
+      <div class="drawer-product-media">
+        ${
+          product.image?.dataUrl
+            ? `<img src="${product.image.dataUrl}" alt="${product.image.name || product.name}" />`
+            : `<div class="drawer-product-placeholder">
+                <span class="material-symbols-rounded">image_not_supported</span>
+                <p>Aucune image disponible</p>
+              </div>`
+        }
+      </div>
+      <dl>
+        <dt>Stock</dt>
+        <dd>${product.stock}</dd>
+        <dt>Prix</dt>
+        <dd>${formatCurrency(product.price)}</dd>
+        <dt>Description</dt>
+        <dd>${product.description || "—"}</dd>
+        <dt>Date d'ajout</dt>
+        <dd>${new Intl.DateTimeFormat("fr-FR", {
+          dateStyle: "medium",
+          timeStyle: "short",
+        }).format(product.createdAt)}</dd>
+      </dl>
+    </div>
   `;
 
   elements.drawerContent.appendChild(productSection);
@@ -782,6 +817,7 @@ function exportProducts() {
       prix: product.price,
       stock: product.stock,
       description: product.description,
+      image_nom: product.image?.name ?? "",
       cree_le: new Date(product.createdAt).toISOString(),
     })),
     `produits-${new Date().toISOString().slice(0, 10)}.csv`,
@@ -815,6 +851,8 @@ function attachEventListeners() {
   elements.exportProductsBtn?.addEventListener("click", exportProducts);
   elements.exportOrdersBtn?.addEventListener("click", exportOrders);
   elements.themeToggle?.addEventListener("change", toggleTheme);
+  elements.productImageInput?.addEventListener("change", handleProductImageChange);
+  elements.productImageClear?.addEventListener("click", handleProductImageClear);
   elements.scanSkuBtn?.addEventListener("click", openSkuScanner);
   elements.scanModalClose?.addEventListener("click", closeSkuScanner);
   elements.scanModalCancel?.addEventListener("click", closeSkuScanner);
@@ -841,6 +879,7 @@ function hydrateUI() {
   renderOrders();
   renderProductOptions();
   clearScan();
+  resetProductImagePreview();
 }
 
 function init() {
