@@ -24,11 +24,13 @@ const elements = {
   productImageClear: document.querySelector("#productImageClear"),
   productTableBody: document.querySelector("#productsTable tbody"),
   productsEmptyState: document.querySelector("#productsEmptyState"),
+  orderForm: document.querySelector("#orderForm"),
+  orderProductSelect: document.querySelector("#orderProduct"),
+  orderQuantity: document.querySelector("#orderQuantity"),
+  orderCustomer: document.querySelector("#orderCustomer"),
+  orderNotes: document.querySelector("#orderNotes"),
   orderTableBody: document.querySelector("#ordersTable tbody"),
   ordersEmptyState: document.querySelector("#ordersEmptyState"),
-  orderSearchForm: document.querySelector("#orderSearchForm"),
-  orderSearchInput: document.querySelector("#orderSearchInput"),
-  orderSearchReset: document.querySelector("#orderSearchReset"),
   scanForm: document.querySelector("#scanForm"),
   scanInput: document.querySelector("#scanInput"),
   scanResult: document.querySelector("#scanResult"),
@@ -96,7 +98,6 @@ let pendingProductImageData = null;
 let pendingProductImageName = null;
 let currentScanMode = "pickup";
 let activeScanTarget = null;
-let orderSearchTerm = "";
 
 function getProductInitial(name) {
   if (!name) return "?";
@@ -168,26 +169,6 @@ function updateHomeStats() {
   }
 }
 
-function matchesOrder(order, term) {
-  if (!term) return true;
-  const normalizedTerm = term.toLowerCase();
-  const fields = [
-    order.reference,
-    order.customer,
-    order.email,
-    order.notes,
-    order.productName,
-    order.productSku,
-  ];
-  if (Array.isArray(order.items)) {
-    order.items.forEach((item) => {
-      fields.push(item.productName, item.productSku);
-    });
-  }
-  const haystack = fields.filter(Boolean).join(" ").toLowerCase();
-  return haystack.includes(normalizedTerm);
-}
-
 function getOrderItems(order) {
   if (Array.isArray(order?.items) && order.items.length) {
     return order.items;
@@ -223,6 +204,39 @@ function buildStatusSelect(select, selectedStatus) {
   });
 }
 
+function renderProductOptions() {
+  if (!elements.orderProductSelect) return;
+  elements.orderProductSelect.innerHTML = "";
+  if (!state.products.length) {
+    const option = document.createElement("option");
+    option.value = "";
+    option.textContent = "Ajoutez d'abord un produit";
+    option.disabled = true;
+    option.selected = true;
+    elements.orderProductSelect.appendChild(option);
+    elements.orderProductSelect.disabled = true;
+    return;
+  }
+
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.textContent = "Choisissez un produit";
+  placeholder.disabled = true;
+  placeholder.selected = true;
+  elements.orderProductSelect.appendChild(placeholder);
+
+  state.products
+    .slice()
+    .sort((a, b) => a.name.localeCompare(b.name, "fr"))
+    .forEach((product) => {
+      const option = document.createElement("option");
+      option.value = product.id;
+      option.textContent = `${product.name} • ${product.sku}`;
+      elements.orderProductSelect.appendChild(option);
+    });
+  elements.orderProductSelect.disabled = false;
+}
+
 function classifyStock(stock) {
   if (stock === 0) return "danger";
   if (stock <= 5) return "low";
@@ -237,9 +251,6 @@ function renderProducts() {
     return;
   }
   elements.productsEmptyState.classList.add("hidden");
-  state.products
-  elements.productsEmptyState.classList.add("hidden");
-
   state.products
     .slice()
     .sort((a, b) => a.name.localeCompare(b.name, "fr"))
@@ -284,84 +295,75 @@ function renderProducts() {
       elements.productTableBody.appendChild(row);
     });
   updateHomeStats();
+  renderProductOptions();
 }
 
 function renderOrders() {
   elements.orderTableBody.innerHTML = "";
-  const filteredOrders = state.orders
-    .slice()
-    .sort((a, b) => b.createdAt - a.createdAt)
-    .filter((order) => matchesOrder(order, orderSearchTerm));
-
-  if (!filteredOrders.length) {
-    if (orderSearchTerm) {
-      elements.ordersEmptyState.textContent = `Aucune commande ne correspond à « ${orderSearchTerm} ».`;
-    } else {
-      elements.ordersEmptyState.textContent =
-        "Pas encore de commandes. Les commandes client apparaîtront automatiquement ici.";
-    }
+  if (!state.orders.length) {
+    elements.ordersEmptyState.textContent =
+      "Pas encore de commandes. Utilisez le formulaire ci-dessus pour en créer.";
     elements.ordersEmptyState.classList.remove("hidden");
     updateHomeStats();
     return;
   }
   elements.ordersEmptyState.classList.add("hidden");
 
-  filteredOrders.forEach((order) => {
-    const row = elements.orderRowTemplate.content.cloneNode(true);
-    const createdAt = order.createdAt
-      ? new Intl.DateTimeFormat("fr-FR", {
-          dateStyle: "medium",
-          timeStyle: "short",
-        }).format(order.createdAt)
-      : "Date inconnue";
+  state.orders
+    .slice()
+    .sort((a, b) => b.createdAt - a.createdAt)
+    .forEach((order) => {
+      const row = elements.orderRowTemplate.content.cloneNode(true);
+      const createdAt = new Intl.DateTimeFormat("fr-FR", {
+        dateStyle: "medium",
+        timeStyle: "short",
+      }).format(order.createdAt);
 
-    const items = getOrderItems(order);
+      const items = getOrderItems(order);
+      const itemsSummary = items
+        .map((item) => `${item.quantity ?? 0}× ${item.productName ?? "Produit"}`)
+        .slice(0, 2)
+        .join(", ");
+      const extraCount = items.length > 2 ? ` +${items.length - 2}` : "";
+      const totalQuantity = items.reduce((sum, item) => sum + (item.quantity ?? 0), 0);
+      const totalAmount =
+        order.total ??
+        items.reduce((sum, item) => sum + (item.unitPrice ?? 0) * (item.quantity ?? 0), 0);
 
-    const itemsSummary = items
-      .map((item) => `${item.quantity ?? 0}× ${item.productName ?? "Produit"}`)
-      .slice(0, 2)
-      .join(", ");
-    const extraCount = items.length > 2 ? ` +${items.length - 2}` : "";
-    const totalQuantity = items.reduce((sum, item) => sum + (item.quantity ?? 0), 0);
-    const totalAmount =
-      order.total ??
-      items.reduce((sum, item) => sum + (item.unitPrice ?? 0) * (item.quantity ?? 0), 0);
+      row.querySelector(".item-title").textContent = order.reference || order.id;
+      row.querySelector(".item-date").textContent = createdAt;
+      row.querySelector(".item-product").textContent = `${itemsSummary}${extraCount}`;
+      row.querySelector(".item-quantity").textContent = `${totalQuantity} article${
+        totalQuantity > 1 ? "s" : ""
+      } • ${formatCurrency(totalAmount)}`;
+      row.querySelector(".item-customer").textContent = order.customer || "Client inconnu";
+      const details = [order.email, order.notes].filter(Boolean).join(" • ") || "—";
+      row.querySelector(".item-notes").textContent = details;
 
-    row.querySelector(".item-title").textContent = order.reference || order.id;
-    row.querySelector(".item-date").textContent = createdAt;
+      const select = row.querySelector(".status-select");
+      buildStatusSelect(select, order.status);
+      select.addEventListener("change", (event) => {
+        updateOrderStatus(order.id, event.target.value);
+      });
 
-    row.querySelector(".item-product").textContent = `${itemsSummary}${extraCount}`;
-    row.querySelector(".item-quantity").textContent = `${totalQuantity} article${
-      totalQuantity > 1 ? "s" : ""
-    } • ${formatCurrency(totalAmount)}`;
-    row.querySelector(".item-customer").textContent = order.customer || "Client inconnu";
-    const details = [order.email, order.notes].filter(Boolean).join(" • ") || "—";
-    row.querySelector(".item-notes").textContent = details;
+      row.querySelector(".icon-button.focus-product").addEventListener("click", () => {
+        const product = state.products.find((p) => p.id === order.productId);
+        if (product) {
+          showScanCard(product, order);
+          openProductDrawer(product, order);
+        } else {
+          alert("Produit introuvable. Il a peut-être été supprimé.");
+        }
+      });
 
-    const select = row.querySelector(".status-select");
-    buildStatusSelect(select, order.status);
-    select.addEventListener("change", (event) => {
-      updateOrderStatus(order.id, event.target.value);
+      row.querySelector(".icon-button.delete").addEventListener("click", () => {
+        if (confirm(`Supprimer la commande ${order.reference} ?`)) {
+          deleteOrder(order.id);
+        }
+      });
+
+      elements.orderTableBody.appendChild(row);
     });
-
-    row.querySelector(".icon-button.focus-product").addEventListener("click", () => {
-      const product = state.products.find((p) => p.id === order.productId);
-      if (product) {
-        showScanCard(product, order);
-        openProductDrawer(product, order);
-      } else {
-        alert("Produit introuvable. Il a peut-être été supprimé.");
-      }
-    });
-
-    row.querySelector(".icon-button.delete").addEventListener("click", () => {
-      if (confirm(`Supprimer la commande ${order.reference} ?`)) {
-        deleteOrder(order.id);
-      }
-    });
-
-    elements.orderTableBody.appendChild(row);
-  });
   updateHomeStats();
 }
 
@@ -399,6 +401,39 @@ function createProduct(formData) {
   };
 }
 
+function createOrder({ productId, quantity, customer, notes }) {
+  const product = state.products.find((item) => item.id === productId);
+  if (!product) throw new Error("Produit introuvable");
+
+  return {
+    id: generateId("ord"),
+    productId: product.id,
+    productSku: product.sku,
+    productName: product.name,
+    quantity,
+    customer,
+    notes,
+    status: "En préparation",
+    createdAt: Date.now(),
+    items: [
+      {
+        productId: product.id,
+        productName: product.name,
+        productSku: product.sku,
+        quantity,
+        unitPrice: product.price,
+      },
+    ],
+    history: [
+      {
+        status: "En préparation",
+        date: Date.now(),
+        note: "Commande créée manuellement depuis le tableau de bord.",
+      },
+    ],
+  };
+}
+
 function handleProductSubmit(event) {
   event.preventDefault();
   const formData = new FormData(event.target);
@@ -416,6 +451,33 @@ function handleProductSubmit(event) {
   elements.scanInput.value = product.sku;
   if (currentScanMode === "pickup") {
     showScanCard(product, undefined, "pickup");
+  }
+}
+
+function handleOrderSubmit(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const productId = elements.orderProductSelect?.value;
+  if (!productId) {
+    alert("Sélectionnez un produit.");
+    return;
+  }
+  const quantity = Number.parseInt(elements.orderQuantity?.value ?? form.orderQuantity.value, 10);
+  if (!Number.isInteger(quantity) || quantity <= 0) {
+    alert("La quantité doit être un nombre positif.");
+    return;
+  }
+  const customer = (elements.orderCustomer?.value ?? form.orderCustomer.value).trim();
+  const notes = (elements.orderNotes?.value ?? form.orderNotes.value).trim();
+
+  const order = createOrder({ productId, quantity, customer, notes });
+  state.orders.push(order);
+  saveState();
+  renderOrders();
+  updateHomeStats();
+  form.reset();
+  if (elements.orderProductSelect) {
+    elements.orderProductSelect.value = "";
   }
 }
 
@@ -1060,6 +1122,7 @@ function exportOrders() {
 
 function attachEventListeners() {
   elements.productForm?.addEventListener("submit", handleProductSubmit);
+  elements.orderForm?.addEventListener("submit", handleOrderSubmit);
   elements.scanForm?.addEventListener("submit", handleScanSubmit);
   elements.clearScanResults?.addEventListener("click", clearScan);
   elements.drawerClose?.addEventListener("click", closeDrawer);
@@ -1071,21 +1134,6 @@ function attachEventListeners() {
   elements.productImageClear?.addEventListener("click", handleProductImageClear);
   elements.scanSkuBtn?.addEventListener("click", () => openSkuScanner(elements.productSkuInput));
   elements.pickupScanBtn?.addEventListener("click", () => openSkuScanner(elements.scanInput));
-  elements.orderSearchForm?.addEventListener("submit", (event) => {
-    event.preventDefault();
-  });
-  elements.orderSearchInput?.addEventListener("input", (event) => {
-    orderSearchTerm = event.target.value.trim();
-    renderOrders();
-  });
-  elements.orderSearchReset?.addEventListener("click", (event) => {
-    event.preventDefault();
-    orderSearchTerm = "";
-    if (elements.orderSearchInput) {
-      elements.orderSearchInput.value = "";
-    }
-    renderOrders();
-  });
   elements.scanModalClose?.addEventListener("click", closeSkuScanner);
   elements.scanModalCancel?.addEventListener("click", closeSkuScanner);
   elements.scanModalOverlay?.addEventListener("click", (event) => {

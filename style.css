@@ -371,46 +371,6 @@ input:checked + .slider::before {
   margin: 0;
 }
 
-.orders-overview {
-  display: grid;
-  gap: 18px;
-}
-
-.order-search {
-  display: grid;
-  gap: 10px;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: end;
-}
-
-.order-search label {
-  font-weight: 600;
-  color: var(--text);
-  grid-column: 1 / -1;
-}
-
-.order-search input {
-  padding: 12px;
-  border-radius: var(--radius-xs);
-  border: 1px solid var(--border);
-  background: var(--bg-panel-alt);
-  font-size: 15px;
-  width: 100%;
-}
-
-.orders-legend {
-  display: grid;
-  gap: 6px;
-  font-size: 13px;
-  color: var(--text-muted);
-}
-
-.orders-legend span {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
 .panel {
   background: var(--bg-panel);
   border-radius: var(--radius);

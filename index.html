@@ -178,34 +178,33 @@
         <div class="page-header">
           <div>
             <h2>Gestion des commandes</h2>
-            <p>Visualisez les commandes en ligne et mettez à jour leurs statuts en temps réel.</p>
+            <p>Créez, suivez et mettez à jour vos statuts en temps réel.</p>
           </div>
           <button class="secondary" id="exportOrdersBtn">Exporter CSV</button>
         </div>
         <section class="panel">
-          <div class="orders-overview">
-            <div>
-              <h3>Commandes générées automatiquement</h3>
-              <p>
-                Les commandes issues du site client apparaissent ici. Utilisez le champ ci-dessous pour
-                rechercher un code de retrait ou une adresse email.
-              </p>
+          <form id="orderForm" class="form-grid">
+            <div class="field">
+              <label for="orderProduct">Produit</label>
+              <select id="orderProduct" required></select>
             </div>
-            <form id="orderSearchForm" class="order-search">
-              <label for="orderSearchInput">Rechercher</label>
-              <input
-                type="search"
-                id="orderSearchInput"
-                placeholder="Code de retrait, client, email..."
-              />
-              <button type="reset" id="orderSearchReset" class="secondary">Effacer</button>
-            </form>
-            <div class="orders-legend">
-              <span><strong>En attente</strong> : commande créée via le site client</span>
-              <span><strong>Prêt pour retrait</strong> : colis vérifié et prêt</span>
-              <span><strong>Remis au client</strong> : colis livré et clôturé</span>
+            <div class="field">
+              <label for="orderQuantity">Quantité</label>
+              <input type="number" min="1" id="orderQuantity" required />
             </div>
-          </div>
+            <div class="field">
+              <label for="orderCustomer">Client</label>
+              <input type="text" id="orderCustomer" placeholder="Nom du client" required />
+            </div>
+            <div class="field">
+              <label for="orderNotes">Notes</label>
+              <input type="text" id="orderNotes" placeholder="Optionnel" />
+            </div>
+            <div class="form-actions">
+              <button type="reset" class="secondary">Réinitialiser</button>
+              <button type="submit">Créer la commande</button>
+            </div>
+          </form>
         </section>
         <section class="panel">
           <div class="table-wrapper">
