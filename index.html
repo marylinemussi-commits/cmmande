@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Gestionnaire de Commandes</title>
+    <link rel="stylesheet" href="style.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <header class="app-header">
+      <div>
+        <h1>Gestionnaire de Commandes</h1>
+        <p>Ajoutez vos produits, suivez vos commandes et scannez les codes-barres.</p>
+      </div>
+      <div class="header-actions">
+        <label class="switch">
+          <input type="checkbox" id="themeToggle" />
+          <span class="slider"></span>
+        </label>
+        <span class="switch-label" id="themeLabel">Mode sombre</span>
+      </div>
+    </header>
+    <main>
+      <section class="panel">
+        <header class="panel-header">
+          <div>
+            <h2>Inventaire produits</h2>
+            <p>Centralisez vos références et générez un code-barres unique.</p>
+          </div>
+          <button class="secondary" id="exportProductsBtn">Exporter CSV</button>
+        </header>
+        <form id="productForm" class="form-grid">
+          <div class="field">
+            <label for="productName">Nom du produit</label>
+            <input type="text" id="productName" name="name" required />
+          </div>
+          <div class="field">
+            <label for="productSku">Code-barres / SKU</label>
+            <div class="input-with-button">
+              <input type="text" id="productSku" name="sku" placeholder="Ex. 1234567890123" required />
+              <button type="button" class="secondary icon-text compact-button" id="scanSkuBtn">
+                <span class="material-symbols-rounded">qr_code_scanner</span>
+                Scanner
+              </button>
+            </div>
+            <small class="field-hint">Utilisez un lecteur code-barres ou cliquez sur “Scanner”.</small>
+          </div>
+          <div class="field">
+            <label for="productImage">Image du produit</label>
+            <div class="image-input">
+              <input type="file" id="productImage" name="image" accept="image/*" />
+              <button type="button" class="secondary compact-button" id="productImageClear" disabled>
+                <span class="material-symbols-rounded">close</span>
+                Retirer
+              </button>
+            </div>
+            <small class="field-hint">Optionnel : ajoutez une photo pour l’inventaire et les fiches produit.</small>
+            <div class="image-preview" id="productImagePreview">
+              <div class="image-preview-placeholder">
+                <span class="material-symbols-rounded">image</span>
+                <p>Aucune image sélectionnée</p>
+              </div>
+            </div>
+          </div>
+          <div class="field">
+            <label for="productPrice">Prix (€)</label>
+            <input type="number" step="0.01" min="0" id="productPrice" name="price" required />
+          </div>
+          <div class="field">
+            <label for="productStock">Stock</label>
+            <input type="number" min="0" id="productStock" name="stock" required />
+          </div>
+          <div class="field field-full">
+            <label for="productDescription">Description</label>
+            <textarea id="productDescription" name="description" rows="2" placeholder="Details, variantes, etc."></textarea>
+          </div>
+          <div class="form-actions">
+            <button type="reset" class="secondary">Effacer</button>
+            <button type="submit">Ajouter le produit</button>
+          </div>
+        </form>
+        <div class="table-wrapper">
+          <table id="productsTable">
+            <thead>
+              <tr>
+                <th>Produit</th>
+                <th>Code-barres</th>
+                <th>Stock</th>
+                <th>Prix</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+          <p class="empty-state" id="productsEmptyState">
+            Aucun produit pour le moment. Ajoutez votre premier article ci-dessus.
+          </p>
+        </div>
+      </section>
+
+      <section class="panel">
+        <header class="panel-header">
+          <div>
+            <h2>Commandes</h2>
+            <p>Créez vos commandes et suivez leur statut en temps réel.</p>
+          </div>
+          <button class="secondary" id="exportOrdersBtn">Exporter CSV</button>
+        </header>
+        <form id="orderForm" class="form-grid">
+          <div class="field">
+            <label for="orderProduct">Produit</label>
+            <select id="orderProduct" required></select>
+          </div>
+          <div class="field">
+            <label for="orderQuantity">Quantité</label>
+            <input type="number" min="1" id="orderQuantity" required />
+          </div>
+          <div class="field">
+            <label for="orderCustomer">Client</label>
+            <input type="text" id="orderCustomer" placeholder="Nom du client" required />
+          </div>
+          <div class="field">
+            <label for="orderNotes">Notes</label>
+            <input type="text" id="orderNotes" placeholder="Optionnel" />
+          </div>
+          <div class="form-actions">
+            <button type="reset" class="secondary">Réinitialiser</button>
+            <button type="submit">Créer la commande</button>
+          </div>
+        </form>
+        <div class="table-wrapper">
+          <table id="ordersTable">
+            <thead>
+              <tr>
+                <th>#Commande</th>
+                <th>Produit</th>
+                <th>Client</th>
+                <th>Statut</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+          <p class="empty-state" id="ordersEmptyState">
+            Pas encore de commandes. Ajoutez-en une pour commencer le suivi.
+          </p>
+        </div>
+      </section>
+
+      <section class="panel panel-scan">
+        <header class="panel-header">
+          <div>
+            <h2>Scanner un code-barres</h2>
+            <p>Scannez ou saisissez un code-barres pour accéder à la fiche produit.</p>
+          </div>
+          <button class="secondary" id="clearScanResults">Effacer</button>
+        </header>
+        <form id="scanForm" class="scan-form">
+          <label for="scanInput" class="scan-label">Code-barres</label>
+          <input
+            type="text"
+            id="scanInput"
+            placeholder="Utilisez un lecteur code-barres ou tapez le code puis Entrée"
+            autofocus
+          />
+        </form>
+        <div class="scan-result" id="scanResult">
+          <p class="empty-state">Scannez un produit pour voir les informations détaillées.</p>
+        </div>
+      </section>
+    </main>
+
+    <template id="productRowTemplate">
+      <tr>
+        <td>
+          <div class="item-main">
+            <div class="product-thumb-wrapper">
+              <img class="product-thumb" alt="" />
+              <span class="product-thumb-fallback"></span>
+            </div>
+            <div>
+              <span class="item-title"></span>
+              <small class="item-description"></small>
+            </div>
+          </div>
+        </td>
+        <td class="badge barcode"></td>
+        <td><span class="badge stock"></span></td>
+        <td><span class="price"></span></td>
+        <td class="table-actions">
+          <button class="icon-button view" title="Voir">
+            <span class="material-symbols-rounded">visibility</span>
+          </button>
+          <button class="icon-button delete" title="Supprimer">
+            <span class="material-symbols-rounded">delete</span>
+          </button>
+        </td>
+      </tr>
+    </template>
+
+    <template id="orderRowTemplate">
+      <tr>
+        <td>
+          <span class="item-title"></span>
+          <small class="item-date"></small>
+        </td>
+        <td>
+          <span class="item-product"></span>
+          <small class="item-quantity"></small>
+        </td>
+        <td>
+          <span class="item-customer"></span>
+          <small class="item-notes"></small>
+        </td>
+        <td>
+          <select class="status-select"></select>
+        </td>
+        <td class="table-actions">
+          <button class="icon-button focus-product" title="Afficher le produit">
+            <span class="material-symbols-rounded">qr_code_scanner</span>
+          </button>
+          <button class="icon-button delete" title="Supprimer">
+            <span class="material-symbols-rounded">delete</span>
+          </button>
+        </td>
+      </tr>
+    </template>
+
+    <div class="drawer" id="drawer">
+      <div class="drawer-header">
+        <div>
+          <h3 id="drawerTitle"></h3>
+          <p id="drawerSubtitle"></p>
+        </div>
+        <button class="icon-button" id="drawerClose">
+          <span class="material-symbols-rounded">close</span>
+        </button>
+      </div>
+      <div class="drawer-body" id="drawerContent"></div>
+    </div>
+    <div class="drawer-overlay" id="drawerOverlay"></div>
+
+    <div class="modal-overlay" id="scanModalOverlay">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="scanModalTitle">
+        <header class="modal-header">
+          <h3 id="scanModalTitle">Scanner le code-barres</h3>
+          <button class="icon-button" id="scanModalClose" type="button" aria-label="Fermer">
+            <span class="material-symbols-rounded">close</span>
+          </button>
+        </header>
+        <p class="modal-description">
+          Placez votre curseur dans le champ ci-dessous puis scannez le code. Le champ se complète automatiquement.
+        </p>
+        <form id="scanModalForm" class="modal-form">
+          <label for="scanModalInput" class="visually-hidden">Code-barres</label>
+          <input
+            id="scanModalInput"
+            type="text"
+            autocomplete="off"
+            inputmode="numeric"
+            placeholder="Scannez ou tapez le code puis Entrée"
+            required
+          />
+          <div class="scanner-preview" id="scanModalVideo">
+            <div class="scanner-placeholder">
+              <span class="material-symbols-rounded">videocam</span>
+              <p>Initialisation du scanner...</p>
+            </div>
+          </div>
+          <p class="scanner-status" id="scanModalStatus">
+            Autorisez l’accès à la caméra pour scanner automatiquement.
+          </p>
+          <div class="modal-actions">
+            <button type="button" class="secondary" id="scanModalCancel">Annuler</button>
+            <button type="submit">Valider</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <script
+      src="https://fonts.googleapis.com/icon?family=Material+Symbols+Rounded"
+      defer
+    ></script>
+    <script src="app.js" type="module"></script>
+  </body>
+</html>
+
