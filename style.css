@@ -177,7 +177,7 @@ input:checked + .slider::before {
   list-style: none;
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   margin: 0;
   padding: 0;
 }
@@ -195,13 +195,13 @@ input:checked + .slider::before {
 
 .nav-link:hover {
   color: var(--accent-strong);
-  background: rgba(101, 89, 245, 0.1);
+  background: rgba(101, 89, 245, 0.12);
 }
 
 .nav-link.active {
   color: #fff;
   background: var(--accent);
-  box-shadow: 0 12px 20px rgba(101, 89, 245, 0.25);
+  box-shadow: 0 12px 24px rgba(101, 89, 245, 0.28);
 }
 
 .page-container {

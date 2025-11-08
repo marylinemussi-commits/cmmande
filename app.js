@@ -231,6 +231,8 @@ function renderProducts() {
     return;
   }
   elements.productsEmptyState.classList.add("hidden");
+  state.products
+  elements.productsEmptyState.classList.add("hidden");
 
   state.products
     .slice()
@@ -407,6 +409,7 @@ function handleProductSubmit(event) {
   saveState();
   renderProducts();
   renderProductOptions();
+  updateHomeStats();
   event.target.reset();
   handleProductImageClear();
   elements.scanInput.value = product.sku;
@@ -434,6 +437,7 @@ function handleOrderSubmit(event) {
   state.orders.push(order);
   saveState();
   renderOrders();
+  updateHomeStats();
   elements.orderForm.reset();
   elements.orderProductSelect.value = "";
 }
