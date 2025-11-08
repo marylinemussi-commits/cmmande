@@ -58,6 +58,9 @@ const cameraState = {
   rafId: null,
   videoElement: null,
   active: false,
+  reader: null,
+  controls: null,
+  usingDetector: false,
   supportedFormats: [
     "code_128",
     "code_39",
@@ -568,58 +571,12 @@ async function startSkuCamera() {
     if (!navigator.mediaDevices?.getUserMedia) {
       throw new Error("Accès caméra non supporté par ce navigateur.");
     }
-    if (!("BarcodeDetector" in window)) {
-      throw new Error(
-        "Le scanner intégré n'est pas supporté par ce navigateur. Utilisez un autre navigateur ou saisissez le code manuellement.",
-      );
+
+    if ("BarcodeDetector" in window) {
+      await startWithBarcodeDetector(videoElement);
+    } else {
+      await startWithZxing(videoElement);
     }
-
-    if (!cameraState.detector) {
-      try {
-        const supported = (await window.BarcodeDetector.getSupportedFormats?.()) ?? [];
-        const formats = supported.filter((format) => cameraState.supportedFormats.includes(format));
-        cameraState.detector = new window.BarcodeDetector({
-          formats: formats.length ? formats : cameraState.supportedFormats,
-        });
-      } catch {
-        cameraState.detector = new window.BarcodeDetector({ formats: cameraState.supportedFormats });
-      }
-    }
-
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: { ideal: "environment" },
-      },
-    });
-    cameraState.stream = stream;
-    videoElement.srcObject = stream;
-    await videoElement.play();
-
-    if (elements.scanModalStatus) {
-      elements.scanModalStatus.textContent = "Scannez le code devant la caméra.";
-    }
-
-    cameraState.active = true;
-
-    const scanFrame = async () => {
-      if (!cameraState.active || !cameraState.detector) return;
-      try {
-        const barcodes = await cameraState.detector.detect(videoElement);
-        if (barcodes.length) {
-          const value = barcodes[0].rawValue?.trim();
-          if (value) {
-            elements.productSkuInput.value = value;
-            closeSkuScanner();
-            return;
-          }
-        }
-      } catch (error) {
-        console.warn("Détection code-barres échouée :", error);
-      }
-      cameraState.rafId = requestAnimationFrame(scanFrame);
-    };
-
-    cameraState.rafId = requestAnimationFrame(scanFrame);
   } catch (error) {
     console.error("Erreur d'initialisation du scanner :", error);
     if (elements.scanModalStatus) {
@@ -646,11 +603,19 @@ function stopSkuCamera() {
     cameraState.stream.getTracks().forEach((track) => track.stop());
     cameraState.stream = null;
   }
+  if (cameraState.controls) {
+    cameraState.controls.stop();
+    cameraState.controls = null;
+  }
+  if (cameraState.reader) {
+    cameraState.reader.reset();
+  }
   if (cameraState.videoElement) {
     cameraState.videoElement.pause();
     cameraState.videoElement.srcObject = null;
     cameraState.videoElement = null;
   }
+  cameraState.usingDetector = false;
 
   if (elements.scanModalVideo) {
     elements.scanModalVideo.innerHTML = `
@@ -928,4 +893,133 @@ function init() {
 }
 
 init();
+
+async function startWithBarcodeDetector(videoElement) {
+  if (!cameraState.detector) {
+    try {
+      const supported = (await window.BarcodeDetector.getSupportedFormats?.()) ?? [];
+      const formats = supported.filter((format) => cameraState.supportedFormats.includes(format));
+      cameraState.detector = new window.BarcodeDetector({
+        formats: formats.length ? formats : cameraState.supportedFormats,
+      });
+    } catch {
+      cameraState.detector = new window.BarcodeDetector({ formats: cameraState.supportedFormats });
+    }
+  }
+
+  const stream = await navigator.mediaDevices.getUserMedia({
+    video: {
+      facingMode: { ideal: "environment" },
+    },
+  });
+
+  cameraState.stream = stream;
+  videoElement.srcObject = stream;
+  await videoElement.play();
+
+  if (elements.scanModalStatus) {
+    elements.scanModalStatus.textContent = "Scannez le code devant la caméra.";
+  }
+
+  cameraState.active = true;
+  cameraState.usingDetector = true;
+
+  const scanFrame = async () => {
+    if (!cameraState.active || !cameraState.detector) return;
+    try {
+      const barcodes = await cameraState.detector.detect(videoElement);
+      if (barcodes.length) {
+        const value = barcodes[0].rawValue?.trim();
+        if (value) {
+          elements.productSkuInput.value = value;
+          closeSkuScanner();
+          return;
+        }
+      }
+    } catch (error) {
+      console.warn("Détection code-barres échouée :", error);
+    }
+    cameraState.rafId = requestAnimationFrame(scanFrame);
+  };
+
+  cameraState.rafId = requestAnimationFrame(scanFrame);
+}
+
+async function ensureZxingLoaded() {
+  if (window.ZXing?.BrowserMultiFormatReader) return;
+
+  await new Promise((resolve, reject) => {
+    let script = document.querySelector('script[data-zxing="true"]');
+    if (script?.dataset.loaded === "done") {
+      resolve();
+      return;
+    }
+    if (!script) {
+      script = document.createElement("script");
+      script.dataset.zxing = "true";
+      script.src = "https://unpkg.com/@zxing/library@0.20.0/umd/index.min.js";
+      script.async = true;
+      script.crossOrigin = "anonymous";
+      document.head.appendChild(script);
+    }
+    script.addEventListener(
+      "load",
+      () => {
+        script.dataset.loaded = "done";
+        resolve();
+      },
+      { once: true },
+    );
+    script.addEventListener(
+      "error",
+      () => {
+        reject(new Error("Impossible de charger la librairie de lecture code-barres."));
+      },
+      { once: true },
+    );
+  });
+}
+
+async function startWithZxing(videoElement) {
+  await ensureZxingLoaded();
+  if (!window.ZXing?.BrowserMultiFormatReader) {
+    throw new Error("Bibliothèque de décodage indisponible.");
+  }
+
+  if (!cameraState.reader) {
+    cameraState.reader = new window.ZXing.BrowserMultiFormatReader();
+  }
+
+  const devices = await cameraState.reader.listVideoInputDevices();
+  if (!devices.length) {
+    throw new Error("Aucune caméra détectée.");
+  }
+
+  const preferredDeviceId =
+    devices.find((device) => device.label?.toLowerCase().includes("back"))?.deviceId ?? devices[0].deviceId;
+
+  if (elements.scanModalStatus) {
+    elements.scanModalStatus.textContent = "Scannez le code devant la caméra.";
+  }
+
+  cameraState.active = true;
+  cameraState.usingDetector = false;
+
+  cameraState.controls = await cameraState.reader.decodeFromVideoDevice(
+    preferredDeviceId,
+    videoElement,
+    (result, err) => {
+      if (result) {
+        const text = result.getText();
+        if (text) {
+          elements.productSkuInput.value = text.trim();
+          closeSkuScanner();
+        }
+      }
+      if (err && !(err instanceof window.ZXing.NotFoundException)) {
+        console.warn("Erreur ZXing :", err);
+      }
+    },
+  );
+}
 
