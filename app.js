@@ -420,26 +420,37 @@ function handleProductSubmit(event) {
 
 function handleOrderSubmit(event) {
   event.preventDefault();
-  const productId = elements.orderProductSelect.value;
+  const form = event.currentTarget;
+  const productSelect = elements.orderProductSelect ?? form.querySelector("#orderProduct");
+  const quantityInput = elements.orderQuantity ?? form.querySelector("#orderQuantity");
+  const customerInput = elements.orderCustomer ?? form.querySelector("#orderCustomer");
+  const notesInput = elements.orderNotes ?? form.querySelector("#orderNotes");
+
+  if (!productSelect || !quantityInput || !customerInput || !notesInput) {
+    console.error("Formulaire de commande introuvable ou incomplet.");
+    return;
+  }
+
+  const productId = productSelect.value;
   if (!productId) {
     alert("Sélectionnez un produit.");
     return;
   }
-  const quantity = Number.parseInt(elements.orderQuantity.value, 10);
+  const quantity = Number.parseInt(quantityInput.value, 10);
   if (!Number.isInteger(quantity) || quantity <= 0) {
     alert("La quantité doit être un nombre positif.");
     return;
   }
-  const customer = elements.orderCustomer.value.trim();
-  const notes = elements.orderNotes.value.trim();
+  const customer = customerInput.value.trim();
+  const notes = notesInput.value.trim();
 
   const order = createOrder({ productId, quantity, customer, notes });
   state.orders.push(order);
   saveState();
   renderOrders();
   updateHomeStats();
-  elements.orderForm.reset();
-  elements.orderProductSelect.value = "";
+  form.reset();
+  productSelect.value = "";
 }
 
 function updateOrderStatus(orderId, status) {
