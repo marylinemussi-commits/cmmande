@@ -183,6 +183,7 @@ function renderProducts() {
 
       const thumbImg = row.querySelector(".product-thumb");
       const thumbFallback = row.querySelector(".product-thumb-fallback");
+      thumbFallback.textContent = getProductInitial(product.name);
       if (product.image?.dataUrl) {
         thumbImg.src = product.image.dataUrl;
         thumbImg.alt = product.image.name || product.name;
@@ -191,7 +192,6 @@ function renderProducts() {
       } else {
         thumbImg.removeAttribute("src");
         thumbImg.style.display = "none";
-        thumbFallback.textContent = getProductInitial(product.name);
         thumbFallback.classList.remove("hidden");
       }
 
@@ -406,12 +406,20 @@ function showScanCard(product, order = null) {
   header.append(title, badge);
   card.append(header);
 
+  const media = document.createElement("div");
+  media.className = "scan-card-media";
   if (product.image?.dataUrl) {
-    const media = document.createElement("div");
-    media.className = "scan-card-media";
     media.innerHTML = `<img src="${product.image.dataUrl}" alt="${product.image.name || product.name}" />`;
-    card.append(media);
+  } else {
+    media.classList.add("placeholder");
+    media.innerHTML = `
+      <div class="scan-card-placeholder">
+        <span class="material-symbols-rounded">image_not_supported</span>
+        <p>Aucune image enregistrée</p>
+      </div>
+    `;
   }
+  card.append(media);
 
   const meta = document.createElement("div");
   meta.className = "meta";
@@ -529,6 +537,45 @@ async function handleProductImageChange(event) {
   }
 }
 
+function loadZxingScript() {
+  if (window.ZXing?.BrowserMultiFormatReader) {
+    return Promise.resolve();
+  }
+
+  return new Promise((resolve, reject) => {
+    let script = document.querySelector('script[data-zxing="true"]');
+    if (script?.dataset.loaded === "done") {
+      resolve();
+      return;
+    }
+
+    if (!script) {
+      script = document.createElement("script");
+      script.dataset.zxing = "true";
+      script.src = "https://unpkg.com/@zxing/library@0.20.0/umd/index.min.js";
+      script.async = true;
+      script.crossOrigin = "anonymous";
+      document.head.appendChild(script);
+    }
+
+    script.addEventListener(
+      "load",
+      () => {
+        script.dataset.loaded = "done";
+        resolve();
+      },
+      { once: true },
+    );
+    script.addEventListener(
+      "error",
+      () => {
+        reject(new Error("Impossible de charger la librairie ZXing."));
+      },
+      { once: true },
+    );
+  });
+}
+
 async function loadBarcodeReader() {
   if (cameraState.reader || cameraState.initializing) {
     return cameraState.reader;
@@ -538,10 +585,11 @@ async function loadBarcodeReader() {
     if (elements.scanModalStatus) {
       elements.scanModalStatus.textContent = "Chargement du scanner...";
     }
-    const module = await import(
-      "https://cdn.jsdelivr.net/npm/@zxing/library@0.19.3/esm/index.min.js"
-    );
-    cameraState.reader = new module.BrowserMultiFormatReader();
+    await loadZxingScript();
+    if (!window.ZXing?.BrowserMultiFormatReader) {
+      throw new Error("La librairie ZXing ne fournit pas BrowserMultiFormatReader.");
+    }
+    cameraState.reader = new window.ZXing.BrowserMultiFormatReader();
     return cameraState.reader;
   } catch (error) {
     console.error("Erreur de chargement du scanner :", error);

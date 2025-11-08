@@ -553,6 +553,23 @@ textarea:focus {
   display: block;
 }
 
+.scan-card-media.placeholder {
+  display: grid;
+  place-items: center;
+}
+
+.scan-card-placeholder {
+  display: grid;
+  gap: 8px;
+  text-align: center;
+  color: var(--text-muted);
+  padding: 24px;
+}
+
+.scan-card-placeholder .material-symbols-rounded {
+  font-size: 36px;
+}
+
 .status-chip {
   display: inline-flex;
   align-items: center;
