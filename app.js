@@ -70,6 +70,8 @@ const cameraState = {
   reader: null,
   controls: null,
   usingDetector: false,
+  overlay: null,
+  overlayTimeout: null,
   supportedFormats: [
     "code_128",
     "code_39",
@@ -649,6 +651,41 @@ function setProductImagePreview(dataUrl, name) {
   }
 }
 
+function ensureScanOverlay() {
+  if (!elements.scanModalVideo) return;
+  let overlay = elements.scanModalVideo.querySelector(".scanner-overlay");
+  if (!overlay) {
+    overlay = document.createElement("div");
+    overlay.className = "scanner-overlay";
+    overlay.innerHTML = `
+      <div class="scanner-frame"></div>
+      <div class="scanner-laser"></div>
+    `;
+    elements.scanModalVideo.appendChild(overlay);
+  }
+  overlay.classList.add("active");
+  cameraState.overlay = overlay;
+}
+
+function triggerScanHighlight() {
+  if (!cameraState.overlay) return;
+  cameraState.overlay.classList.add("detected");
+  clearTimeout(cameraState.overlayTimeout);
+  cameraState.overlayTimeout = setTimeout(() => {
+    cameraState.overlay?.classList.remove("detected");
+  }, 500);
+}
+
+function resetScanOverlay() {
+  if (cameraState.overlay) {
+    cameraState.overlay.classList.remove("active", "detected");
+  }
+  if (cameraState.overlayTimeout) {
+    clearTimeout(cameraState.overlayTimeout);
+    cameraState.overlayTimeout = null;
+  }
+}
+
 function handleProductImageClear() {
   if (elements.productImageInput) {
     elements.productImageInput.value = "";
@@ -697,6 +734,7 @@ async function startSkuCamera() {
   videoElement.className = "scanner-video";
   elements.scanModalVideo.appendChild(videoElement);
   cameraState.videoElement = videoElement;
+  ensureScanOverlay();
 
   try {
     if (elements.scanModalStatus) {
@@ -749,6 +787,7 @@ function stopSkuCamera() {
     cameraState.videoElement.srcObject = null;
     cameraState.videoElement = null;
   }
+  resetScanOverlay();
   cameraState.usingDetector = false;
 
   if (elements.scanModalVideo) {
@@ -1082,6 +1121,7 @@ async function startWithBarcodeDetector(videoElement) {
         if (barcodes.length) {
           const value = barcodes[0].rawValue?.trim();
           if (value) {
+            triggerScanHighlight();
             const target = activeScanTarget ?? elements.productSkuInput;
             target.value = value;
             if (target === elements.scanInput) {
@@ -1168,6 +1208,7 @@ async function startWithZxing(videoElement) {
         const text = result.getText();
         if (text) {
           const value = text.trim();
+          triggerScanHighlight();
           const target = activeScanTarget ?? elements.productSkuInput;
           target.value = value;
           if (target === elements.scanInput) {

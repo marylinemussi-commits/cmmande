@@ -1289,6 +1289,62 @@ textarea:focus {
   color: var(--text-muted);
 }
 
+.scanner-overlay {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-sm);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.scanner-overlay.active {
+  opacity: 1;
+}
+
+.scanner-frame {
+  position: absolute;
+  inset: 12%;
+  border-radius: clamp(16px, 3vw, 24px);
+  border: 2px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08), 0 0 40px rgba(101, 89, 245, 0.35);
+}
+
+.scanner-laser {
+  position: absolute;
+  left: 12%;
+  right: 12%;
+  top: 15%;
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, rgba(101, 89, 245, 0.9), transparent);
+  animation: scannerSweep 2.2s infinite ease-in-out;
+  box-shadow: 0 0 12px rgba(101, 89, 245, 0.65);
+}
+
+.scanner-overlay.detected .scanner-frame {
+  border-color: rgba(39, 174, 128, 0.7);
+  box-shadow: 0 0 0 2px rgba(39, 174, 128, 0.4), 0 0 36px rgba(39, 174, 128, 0.45);
+}
+
+.scanner-overlay.detected .scanner-laser {
+  animation: none;
+  background: linear-gradient(90deg, transparent, rgba(39, 174, 128, 0.95), transparent);
+  box-shadow: 0 0 16px rgba(39, 174, 128, 0.6);
+}
+
+@keyframes scannerSweep {
+  0% {
+    top: 15%;
+  }
+  50% {
+    top: 75%;
+  }
+  100% {
+    top: 15%;
+  }
+}
+
 .modal-actions {
   display: flex;
   justify-content: flex-end;
