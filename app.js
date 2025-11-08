@@ -53,10 +53,21 @@ const elements = {
 };
 
 const cameraState = {
-  reader: null,
-  controls: null,
+  stream: null,
+  detector: null,
+  rafId: null,
   videoElement: null,
-  initializing: false,
+  active: false,
+  supportedFormats: [
+    "code_128",
+    "code_39",
+    "code_93",
+    "ean_13",
+    "ean_8",
+    "upc_a",
+    "upc_e",
+    "qr_code",
+  ],
 };
 
 const IMAGE_PREVIEW_PLACEHOLDER = `
@@ -537,72 +548,6 @@ async function handleProductImageChange(event) {
   }
 }
 
-function loadZxingScript() {
-  if (window.ZXing?.BrowserMultiFormatReader) {
-    return Promise.resolve();
-  }
-
-  return new Promise((resolve, reject) => {
-    let script = document.querySelector('script[data-zxing="true"]');
-    if (script?.dataset.loaded === "done") {
-      resolve();
-      return;
-    }
-
-    if (!script) {
-      script = document.createElement("script");
-      script.dataset.zxing = "true";
-      script.src = "https://unpkg.com/@zxing/library@0.20.0/umd/index.min.js";
-      script.async = true;
-      script.crossOrigin = "anonymous";
-      document.head.appendChild(script);
-    }
-
-    script.addEventListener(
-      "load",
-      () => {
-        script.dataset.loaded = "done";
-        resolve();
-      },
-      { once: true },
-    );
-    script.addEventListener(
-      "error",
-      () => {
-        reject(new Error("Impossible de charger la librairie ZXing."));
-      },
-      { once: true },
-    );
-  });
-}
-
-async function loadBarcodeReader() {
-  if (cameraState.reader || cameraState.initializing) {
-    return cameraState.reader;
-  }
-  cameraState.initializing = true;
-  try {
-    if (elements.scanModalStatus) {
-      elements.scanModalStatus.textContent = "Chargement du scanner...";
-    }
-    await loadZxingScript();
-    if (!window.ZXing?.BrowserMultiFormatReader) {
-      throw new Error("La librairie ZXing ne fournit pas BrowserMultiFormatReader.");
-    }
-    cameraState.reader = new window.ZXing.BrowserMultiFormatReader();
-    return cameraState.reader;
-  } catch (error) {
-    console.error("Erreur de chargement du scanner :", error);
-    if (elements.scanModalStatus) {
-      elements.scanModalStatus.textContent =
-        "Impossible de charger le module de lecture. Saisissez le code manuellement.";
-    }
-    throw error;
-  } finally {
-    cameraState.initializing = false;
-  }
-}
-
 async function startSkuCamera() {
   if (!elements.scanModalVideo || !elements.scanModalOverlay?.classList.contains("visible")) {
     return;
@@ -617,34 +562,64 @@ async function startSkuCamera() {
   cameraState.videoElement = videoElement;
 
   try {
-    const reader = await loadBarcodeReader();
-    if (!reader) return;
-    const devices = await reader.listVideoInputDevices();
-    if (!devices.length) {
-      throw new Error("Aucune caméra détectée.");
+    if (elements.scanModalStatus) {
+      elements.scanModalStatus.textContent = "Initialisation de la caméra...";
     }
-    const preferredDeviceId =
-      devices.find((device) => device.label.toLowerCase().includes("back"))?.deviceId ??
-      devices[0].deviceId;
+    if (!navigator.mediaDevices?.getUserMedia) {
+      throw new Error("Accès caméra non supporté par ce navigateur.");
+    }
+    if (!("BarcodeDetector" in window)) {
+      throw new Error(
+        "Le scanner intégré n'est pas supporté par ce navigateur. Utilisez un autre navigateur ou saisissez le code manuellement.",
+      );
+    }
+
+    if (!cameraState.detector) {
+      try {
+        const supported = (await window.BarcodeDetector.getSupportedFormats?.()) ?? [];
+        const formats = supported.filter((format) => cameraState.supportedFormats.includes(format));
+        cameraState.detector = new window.BarcodeDetector({
+          formats: formats.length ? formats : cameraState.supportedFormats,
+        });
+      } catch {
+        cameraState.detector = new window.BarcodeDetector({ formats: cameraState.supportedFormats });
+      }
+    }
+
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { ideal: "environment" },
+      },
+    });
+    cameraState.stream = stream;
+    videoElement.srcObject = stream;
+    await videoElement.play();
 
     if (elements.scanModalStatus) {
-      elements.scanModalStatus.textContent = "Scannez le code-barres devant la caméra.";
+      elements.scanModalStatus.textContent = "Scannez le code devant la caméra.";
     }
 
-    cameraState.controls = await reader.decodeFromVideoDevice(
-      preferredDeviceId,
-      videoElement,
-      (result, err) => {
-        if (result) {
-          const text = result.getText();
-          if (text) {
-            elements.productSkuInput.value = text.trim();
+    cameraState.active = true;
+
+    const scanFrame = async () => {
+      if (!cameraState.active || !cameraState.detector) return;
+      try {
+        const barcodes = await cameraState.detector.detect(videoElement);
+        if (barcodes.length) {
+          const value = barcodes[0].rawValue?.trim();
+          if (value) {
+            elements.productSkuInput.value = value;
             closeSkuScanner();
+            return;
           }
         }
-        // Ignore décodages partiels (err)
-      },
-    );
+      } catch (error) {
+        console.warn("Détection code-barres échouée :", error);
+      }
+      cameraState.rafId = requestAnimationFrame(scanFrame);
+    };
+
+    cameraState.rafId = requestAnimationFrame(scanFrame);
   } catch (error) {
     console.error("Erreur d'initialisation du scanner :", error);
     if (elements.scanModalStatus) {
@@ -662,17 +637,21 @@ async function startSkuCamera() {
 }
 
 function stopSkuCamera() {
-  if (cameraState.controls) {
-    cameraState.controls.stop();
-    cameraState.controls = null;
+  cameraState.active = false;
+  if (cameraState.rafId) {
+    cancelAnimationFrame(cameraState.rafId);
+    cameraState.rafId = null;
   }
-  if (cameraState.reader) {
-    cameraState.reader.reset();
+  if (cameraState.stream) {
+    cameraState.stream.getTracks().forEach((track) => track.stop());
+    cameraState.stream = null;
   }
   if (cameraState.videoElement) {
+    cameraState.videoElement.pause();
     cameraState.videoElement.srcObject = null;
     cameraState.videoElement = null;
   }
+
   if (elements.scanModalVideo) {
     elements.scanModalVideo.innerHTML = `
       <div class="scanner-placeholder">
