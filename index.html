@@ -233,7 +233,13 @@
             <h2>Retrait client</h2>
             <p>Scannez le colis au comptoir pour vérifier et remettre le paquet.</p>
           </div>
-          <button class="secondary" id="clearScanResults">Effacer</button>
+          <div class="page-header-actions">
+            <button type="button" class="icon-text" id="pickupScanBtn">
+              <span class="material-symbols-rounded">qr_code_scanner</span>
+              Scanner caméra
+            </button>
+            <button class="secondary" id="clearScanResults">Effacer</button>
+          </div>
         </div>
         <section class="panel panel-scan">
           <form id="scanForm" class="scan-form" data-mode="pickup">

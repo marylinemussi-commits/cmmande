@@ -52,6 +52,7 @@ const elements = {
   exportOrdersBtn: document.querySelector("#exportOrdersBtn"),
   themeToggle: document.querySelector("#themeToggle"),
   themeLabel: document.querySelector("#themeLabel"),
+  pickupScanBtn: document.querySelector("#pickupScanBtn"),
   pages: document.querySelectorAll("[data-page]"),
   navTriggers: document.querySelectorAll("[data-nav]"),
   navLinks: document.querySelectorAll(".nav-link"),
@@ -91,6 +92,7 @@ const IMAGE_PREVIEW_PLACEHOLDER = `
 let pendingProductImageData = null;
 let pendingProductImageName = null;
 let currentScanMode = "pickup";
+let activeScanTarget = null;
 
 function getProductInitial(name) {
   if (!name) return "?";
@@ -569,13 +571,12 @@ function showScanCard(product, order = null, mode = "inventory") {
   elements.scanResult.appendChild(card);
 }
 
-function handleScanSubmit(event) {
-  event.preventDefault();
-  const mode = event.currentTarget.dataset.mode ?? "inventory";
-  currentScanMode = mode;
-  const code = elements.scanInput.value.trim();
+function processScanValue(rawCode, mode = currentScanMode) {
+  const code = rawCode.trim();
   if (!code) return;
-
+  if (elements.scanResult) {
+    elements.scanResult.dataset.context = mode;
+  }
   let product = state.products.find((item) => item.sku === code);
   let relatedOrder = null;
 
@@ -605,10 +606,25 @@ function handleScanSubmit(event) {
   showScanCard(product, relatedOrder ?? undefined, mode);
 }
 
+function handleScanSubmit(event) {
+  event.preventDefault();
+  const mode = event.currentTarget.dataset.mode ?? currentScanMode;
+  currentScanMode = mode;
+  const code = elements.scanInput.value.trim();
+  if (!code) return;
+  processScanValue(code, mode);
+}
+
 function clearScan() {
   elements.scanInput.value = "";
-  elements.scanResult.innerHTML =
-    '<p class="empty-state">Scannez un colis pour afficher les informations produit et commande.</p>';
+  const message =
+    currentScanMode === "pickup"
+      ? "Scannez un colis pour afficher les informations produit et commande."
+      : "Scannez un produit pour voir les informations détaillées.";
+  if (elements.scanResult) {
+    elements.scanResult.dataset.context = currentScanMode;
+  }
+  elements.scanResult.innerHTML = `<p class="empty-state">${message}</p>`;
 }
 
 function resetProductImagePreview() {
@@ -749,8 +765,9 @@ function stopSkuCamera() {
   }
 }
 
-function openSkuScanner() {
+function openSkuScanner(targetInput = elements.productSkuInput) {
   if (!elements.scanModalOverlay) return;
+  activeScanTarget = targetInput ?? elements.productSkuInput;
   elements.scanModalOverlay.classList.add("visible");
   elements.scanModalInput.value = "";
   if (elements.scanModalStatus) {
@@ -775,15 +792,21 @@ function closeSkuScanner() {
   stopSkuCamera();
   elements.scanModalOverlay.classList.remove("visible");
   elements.scanModalInput.blur();
+  activeScanTarget = null;
 }
 
 function handleSkuScanSubmit(event) {
   event.preventDefault();
   const code = elements.scanModalInput.value.trim();
   if (!code) return;
-  elements.productSkuInput.value = code;
+  const target = activeScanTarget ?? elements.productSkuInput;
+  target.value = code;
   closeSkuScanner();
-  elements.productSkuInput.focus();
+  if (target === elements.scanInput) {
+    processScanValue(code, "pickup");
+  } else {
+    target.focus();
+  }
 }
 
 function renderHistory(history) {
@@ -974,7 +997,8 @@ function attachEventListeners() {
   elements.themeToggle?.addEventListener("change", toggleTheme);
   elements.productImageInput?.addEventListener("change", handleProductImageChange);
   elements.productImageClear?.addEventListener("click", handleProductImageClear);
-  elements.scanSkuBtn?.addEventListener("click", openSkuScanner);
+  elements.scanSkuBtn?.addEventListener("click", () => openSkuScanner(elements.productSkuInput));
+  elements.pickupScanBtn?.addEventListener("click", () => openSkuScanner(elements.scanInput));
   elements.scanModalClose?.addEventListener("click", closeSkuScanner);
   elements.scanModalCancel?.addEventListener("click", closeSkuScanner);
   elements.scanModalOverlay?.addEventListener("click", (event) => {
@@ -1055,14 +1079,18 @@ async function startWithBarcodeDetector(videoElement) {
     if (!cameraState.active || !cameraState.detector) return;
     try {
       const barcodes = await cameraState.detector.detect(videoElement);
-      if (barcodes.length) {
-        const value = barcodes[0].rawValue?.trim();
-        if (value) {
-          elements.productSkuInput.value = value;
-          closeSkuScanner();
-          return;
+        if (barcodes.length) {
+          const value = barcodes[0].rawValue?.trim();
+          if (value) {
+            const target = activeScanTarget ?? elements.productSkuInput;
+            target.value = value;
+            if (target === elements.scanInput) {
+              processScanValue(value, "pickup");
+            }
+            closeSkuScanner();
+            return;
+          }
         }
-      }
     } catch (error) {
       console.warn("Détection code-barres échouée :", error);
     }
@@ -1139,7 +1167,12 @@ async function startWithZxing(videoElement) {
       if (result) {
         const text = result.getText();
         if (text) {
-          elements.productSkuInput.value = text.trim();
+          const value = text.trim();
+          const target = activeScanTarget ?? elements.productSkuInput;
+          target.value = value;
+          if (target === elements.scanInput) {
+            processScanValue(value, "pickup");
+          }
           closeSkuScanner();
         }
       }
