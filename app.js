@@ -15,6 +15,7 @@ const state = {
   products: [],
   orders: [],
   tpeHistory: [],
+  storeCart: [],
 };
 
 const elements = {
@@ -63,6 +64,19 @@ const elements = {
   homeProductsCount: document.querySelector("#statProductsCount"),
   homeOrdersOpen: document.querySelector("#statOrdersOpen"),
   homePickupReady: document.querySelector("#statPickupReady"),
+  storeProductsList: document.querySelector("#storeProductsList"),
+  storeSearch: document.querySelector("#storeSearch"),
+  storeBarcodeInput: document.querySelector("#storeBarcodeInput"),
+  storeScanBtn: document.querySelector("#storeScanBtn"),
+  storeCartList: document.querySelector("#storeCartList"),
+  storeResetBtn: document.querySelector("#storeResetBtn"),
+  storeCheckoutForm: document.querySelector("#storeCheckoutForm"),
+  storeCustomer: document.querySelector("#storeCustomer"),
+  storeDiscount: document.querySelector("#storeDiscount"),
+  storeSubtotal: document.querySelector("#storeSubtotal"),
+  storeDiscountValue: document.querySelector("#storeDiscountValue"),
+  storeTotal: document.querySelector("#storeTotal"),
+  storeCheckoutButton: document.querySelector("#storeCheckoutForm .checkout-button"),
   tpeAmount: document.querySelector("#tpeAmount"),
   tpeStatus: document.querySelector("#tpeStatus"),
   tpeReset: document.querySelector("#tpeReset"),
@@ -112,7 +126,6 @@ let lastScanMode = "inventory";
 let activeDrawerProductId = null;
 let activeDrawerOrderId = null;
 let tpeBuffer = "0";
-let tpeHistory = [];
 
 function getProductInitial(name) {
   if (!name) return "?";
@@ -127,6 +140,7 @@ function loadState() {
     state.products = parsed.products ?? [];
     state.orders = parsed.orders ?? [];
     state.tpeHistory = parsed.tpeHistory ?? [];
+    state.storeCart = parsed.storeCart ?? [];
   } catch (error) {
     console.error("Impossible de charger l'état sauvegardé :", error);
   }
@@ -164,6 +178,10 @@ function setActivePage(pageId) {
     clearScan();
     setTimeout(() => {
       elements.scanInput?.focus();
+    }, 150);
+  } else if (pageId === "store") {
+    setTimeout(() => {
+      (elements.storeBarcodeInput || elements.storeSearch)?.focus();
     }, 150);
   }
   window.scrollTo({ top: 0, behavior: "smooth" });
@@ -264,6 +282,9 @@ function renderProducts() {
   if (!state.products.length) {
     elements.productsEmptyState.classList.remove("hidden");
     updateHomeStats();
+    renderProductOptions();
+    renderStoreProducts();
+    renderStoreCart();
     return;
   }
   elements.productsEmptyState.classList.add("hidden");
@@ -316,6 +337,8 @@ function renderProducts() {
     });
   updateHomeStats();
   renderProductOptions();
+  renderStoreProducts();
+  renderStoreCart();
 }
 
 function renderOrders() {
@@ -389,6 +412,7 @@ function renderOrders() {
 
 function deleteProduct(productId) {
   state.products = state.products.filter((product) => product.id !== productId);
+  state.storeCart = state.storeCart.filter((item) => item.productId !== productId);
   saveState();
   renderProducts();
 }
@@ -442,6 +466,370 @@ function refreshDrawerIfNeeded(product) {
     ? state.orders.find((order) => order.id === activeDrawerOrderId)
     : undefined;
   openProductDrawer(product, relatedOrder);
+}
+
+function normalizeStoreCart() {
+  let changed = false;
+  state.storeCart = state.storeCart.filter((item) => {
+    const product = state.products.find((p) => p.id === item.productId);
+    if (!product) {
+      changed = true;
+      return false;
+    }
+    const maxStock = Math.max(0, Number.parseInt(product.stock, 10) || 0);
+    if (maxStock === 0) {
+      changed = true;
+      return false;
+    }
+    if (item.quantity > maxStock) {
+      item.quantity = maxStock;
+      changed = true;
+    }
+    return item.quantity > 0;
+  });
+  if (changed) {
+    saveState();
+  }
+  return changed;
+}
+
+function getStoreDiscountRate() {
+  if (!elements.storeDiscount) return 0;
+  const raw = Number.parseFloat(elements.storeDiscount.value);
+  if (!Number.isFinite(raw)) {
+    elements.storeDiscount.value = "0";
+    return 0;
+  }
+  const clamped = Math.min(100, Math.max(0, raw));
+  if (clamped !== raw) {
+    elements.storeDiscount.value = clamped.toString();
+  }
+  return clamped;
+}
+
+function updateStoreTotals() {
+  const subtotal = state.storeCart.reduce((sum, item) => {
+    const product = state.products.find((p) => p.id === item.productId);
+    if (!product) return sum;
+    return sum + (product.price ?? 0) * item.quantity;
+  }, 0);
+  const discountRate = getStoreDiscountRate();
+  const discountValue = Math.min(subtotal, (subtotal * discountRate) / 100);
+  const total = Math.max(0, subtotal - discountValue);
+
+  if (elements.storeSubtotal) {
+    elements.storeSubtotal.textContent = formatCurrency(subtotal);
+  }
+  if (elements.storeDiscountValue) {
+    elements.storeDiscountValue.textContent = `- ${formatCurrency(discountValue)}`;
+  }
+  if (elements.storeTotal) {
+    elements.storeTotal.textContent = formatCurrency(total);
+  }
+  if (elements.storeCheckoutButton) {
+    elements.storeCheckoutButton.disabled = state.storeCart.length === 0;
+  }
+
+  return { subtotal, discountValue, total };
+}
+
+function renderStoreProducts() {
+  if (!elements.storeProductsList) return;
+  const query = elements.storeSearch?.value.trim().toLowerCase() ?? "";
+  const products = state.products
+    .slice()
+    .filter((product) => {
+      if (!query) return true;
+      return (
+        product.name.toLowerCase().includes(query) ||
+        product.sku.toLowerCase().includes(query) ||
+        (product.description ?? "").toLowerCase().includes(query)
+      );
+    })
+    .sort((a, b) => a.name.localeCompare(b.name, "fr"));
+
+  if (!products.length) {
+    elements.storeProductsList.innerHTML =
+      '<p class="empty-state">Aucun produit. Ajoutez des articles dans l’onglet Inventaire.</p>';
+    return;
+  }
+
+  const fragments = document.createDocumentFragment();
+  products.forEach((product) => {
+    const card = document.createElement("article");
+    card.className = "store-product-card";
+
+    const header = document.createElement("div");
+    header.className = "store-product-header";
+    const title = document.createElement("h4");
+    title.textContent = product.name;
+    const badge = document.createElement("span");
+    badge.className = `badge ${classifyStock(product.stock)}`;
+    badge.textContent = `${product.stock} en stock`;
+    header.append(title, badge);
+
+    const info = document.createElement("div");
+    info.className = "store-product-info";
+    info.textContent = product.description || "—";
+
+    const footer = document.createElement("div");
+    footer.className = "store-product-actions";
+    const price = document.createElement("strong");
+    price.textContent = formatCurrency(product.price ?? 0);
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "secondary";
+    button.dataset.action = "add";
+    button.dataset.id = product.id;
+    button.textContent = "Ajouter";
+    if (!product.stock) {
+      button.disabled = true;
+      button.textContent = "Rupture";
+    }
+    footer.append(price, button);
+
+    card.append(header, info, footer);
+    fragments.appendChild(card);
+  });
+
+  elements.storeProductsList.innerHTML = "";
+  elements.storeProductsList.appendChild(fragments);
+}
+
+function renderStoreCart() {
+  if (!elements.storeCartList) return;
+  normalizeStoreCart();
+
+  if (!state.storeCart.length) {
+    elements.storeCartList.innerHTML =
+      '<p class="empty-state">Ajoutez des produits pour démarrer une vente.</p>';
+    updateStoreTotals();
+    return;
+  }
+
+  const fragments = document.createDocumentFragment();
+  state.storeCart.forEach((item) => {
+    const product = state.products.find((p) => p.id === item.productId);
+    if (!product) return;
+
+    const article = document.createElement("article");
+    article.className = "store-cart-item";
+    article.dataset.id = item.productId;
+
+    const header = document.createElement("header");
+    const title = document.createElement("span");
+    title.textContent = product.name;
+    const removeBtn = document.createElement("button");
+    removeBtn.type = "button";
+    removeBtn.className = "icon-button";
+    removeBtn.dataset.action = "remove";
+    removeBtn.dataset.id = item.productId;
+    removeBtn.innerHTML = '<span class="material-symbols-rounded">delete</span>';
+    header.append(title, removeBtn);
+
+    const details = document.createElement("div");
+    details.className = "store-cart-line";
+    details.textContent = `Code-barres : ${product.sku}`;
+
+    const footer = document.createElement("footer");
+    const quantityControl = document.createElement("div");
+    quantityControl.className = "store-cart-quantity";
+    const decreaseBtn = document.createElement("button");
+    decreaseBtn.type = "button";
+    decreaseBtn.dataset.action = "decrease";
+    decreaseBtn.dataset.id = item.productId;
+    decreaseBtn.textContent = "−";
+    const qtySpan = document.createElement("span");
+    qtySpan.textContent = item.quantity.toString();
+    const increaseBtn = document.createElement("button");
+    increaseBtn.type = "button";
+    increaseBtn.dataset.action = "increase";
+    increaseBtn.dataset.id = item.productId;
+    increaseBtn.textContent = "+";
+    if (item.quantity >= product.stock) {
+      increaseBtn.disabled = true;
+    }
+    quantityControl.append(decreaseBtn, qtySpan, increaseBtn);
+
+    const lineTotal = document.createElement("strong");
+    lineTotal.textContent = formatCurrency((product.price ?? 0) * item.quantity);
+
+    footer.append(quantityControl, lineTotal);
+
+    article.append(header, details, footer);
+    fragments.appendChild(article);
+  });
+
+  elements.storeCartList.innerHTML = "";
+  elements.storeCartList.appendChild(fragments);
+  updateStoreTotals();
+}
+
+function addStoreProductToCart(productId, quantity = 1) {
+  const product = state.products.find((item) => item.id === productId);
+  if (!product) {
+    alert("Produit introuvable.");
+    return;
+  }
+  const maxStock = Math.max(0, Number.parseInt(product.stock, 10) || 0);
+  if (maxStock === 0) {
+    alert(`"${product.name}" est en rupture de stock.`);
+    return;
+  }
+
+  const existing = state.storeCart.find((item) => item.productId === productId);
+  if (existing) {
+    const newQuantity = Math.min(maxStock, existing.quantity + quantity);
+    if (newQuantity === existing.quantity) {
+      alert("Quantité maximale atteinte par rapport au stock disponible.");
+      return;
+    }
+    existing.quantity = newQuantity;
+  } else {
+    state.storeCart.push({ productId, quantity: Math.min(maxStock, quantity) });
+  }
+  saveState();
+  renderStoreCart();
+}
+
+function setStoreItemQuantity(productId, quantity) {
+  const product = state.products.find((item) => item.id === productId);
+  if (!product) return;
+  const maxStock = Math.max(0, Number.parseInt(product.stock, 10) || 0);
+  const safeQuantity = Math.min(maxStock, Math.max(0, quantity));
+
+  const entry = state.storeCart.find((item) => item.productId === productId);
+  if (!entry) return;
+
+  if (safeQuantity === 0) {
+    state.storeCart = state.storeCart.filter((item) => item.productId !== productId);
+  } else {
+    entry.quantity = safeQuantity;
+  }
+  saveState();
+  renderStoreCart();
+}
+
+function removeStoreItem(productId) {
+  state.storeCart = state.storeCart.filter((item) => item.productId !== productId);
+  saveState();
+  renderStoreCart();
+}
+
+function handleStoreProductsClick(event) {
+  const button = event.target.closest("button[data-action='add']");
+  if (!button) return;
+  const productId = button.dataset.id;
+  addStoreProductToCart(productId);
+}
+
+function handleStoreCartClick(event) {
+  const button = event.target.closest("button[data-action]");
+  if (!button) return;
+  const productId = button.dataset.id;
+  const action = button.dataset.action;
+
+  if (action === "remove") {
+    removeStoreItem(productId);
+    return;
+  }
+
+  const entry = state.storeCart.find((item) => item.productId === productId);
+  if (!entry) return;
+
+  if (action === "decrease") {
+    setStoreItemQuantity(productId, entry.quantity - 1);
+  }
+  if (action === "increase") {
+    setStoreItemQuantity(productId, entry.quantity + 1);
+  }
+}
+
+function handleStoreSearch() {
+  renderStoreProducts();
+}
+
+function handleStoreReset() {
+  state.storeCart = [];
+  saveState();
+  if (elements.storeCustomer) elements.storeCustomer.value = "";
+  if (elements.storeDiscount) elements.storeDiscount.value = "0";
+  renderStoreCart();
+  updateStoreTotals();
+  elements.storeBarcodeInput?.focus();
+}
+
+function addStoreProductBySku(code) {
+  const product = state.products.find((item) => item.sku === code);
+  if (!product) {
+    alert(`Aucun produit avec le code ${code}.`);
+    return false;
+  }
+  addStoreProductToCart(product.id);
+  return true;
+}
+
+function handleStoreBarcodeSubmit(event) {
+  if (event?.key && event.key !== "Enter") return;
+  event?.preventDefault?.();
+  const code = elements.storeBarcodeInput?.value.trim();
+  if (!code) return;
+  const success = addStoreProductBySku(code);
+  if (success && elements.storeBarcodeInput) {
+    elements.storeBarcodeInput.value = "";
+  }
+}
+
+function handleStoreDiscountChange() {
+  getStoreDiscountRate();
+  updateStoreTotals();
+}
+
+function handleStoreCheckout(event) {
+  event.preventDefault();
+  if (!state.storeCart.length) {
+    alert("Le panier est vide.");
+    return;
+  }
+
+  const insufficient = state.storeCart.find((item) => {
+    const product = state.products.find((p) => p.id === item.productId);
+    return !product || item.quantity > product.stock;
+  });
+
+  if (insufficient) {
+    alert("Stock insuffisant pour finaliser la vente. Vérifiez les quantités.");
+    return;
+  }
+
+  const { subtotal, discountValue, total } = updateStoreTotals();
+
+  state.storeCart.forEach((item) => {
+    const product = state.products.find((p) => p.id === item.productId);
+    if (!product) return;
+    const currentStock = Number.parseInt(product.stock, 10) || 0;
+    product.stock = Math.max(0, currentStock - item.quantity);
+  });
+
+  state.storeCart = [];
+  saveState();
+  renderProducts();
+
+  if (elements.storeCustomer) elements.storeCustomer.value = "";
+  if (elements.storeDiscount) elements.storeDiscount.value = "0";
+  updateStoreTotals();
+
+  if (total > 0) {
+    setTpeBufferFromCents(Math.round(total * 100));
+    setTpeStatus("Montant transféré depuis la caisse.");
+  }
+
+  alert(
+    `Vente enregistrée : ${formatCurrency(total)} (dont remise ${formatCurrency(
+      discountValue,
+    )} sur un sous-total de ${formatCurrency(subtotal)}).`,
+  );
+  elements.storeBarcodeInput?.focus();
 }
 
 function getTpeAmountCents() {
@@ -1140,6 +1528,10 @@ function handleSkuScanSubmit(event) {
   closeSkuScanner();
   if (target === elements.scanInput) {
     processScanValue(code, "pickup");
+  } else if (target === elements.storeBarcodeInput) {
+    const success = addStoreProductBySku(code);
+    target.value = success ? "" : code;
+    target.focus();
   } else {
     target.focus();
   }
@@ -1370,6 +1762,14 @@ function attachEventListeners() {
   elements.productImageClear?.addEventListener("click", handleProductImageClear);
   elements.scanSkuBtn?.addEventListener("click", () => openSkuScanner(elements.productSkuInput));
   elements.pickupScanBtn?.addEventListener("click", () => openSkuScanner(elements.scanInput));
+  elements.storeScanBtn?.addEventListener("click", () => openSkuScanner(elements.storeBarcodeInput));
+  elements.storeProductsList?.addEventListener("click", handleStoreProductsClick);
+  elements.storeCartList?.addEventListener("click", handleStoreCartClick);
+  elements.storeSearch?.addEventListener("input", handleStoreSearch);
+  elements.storeBarcodeInput?.addEventListener("keydown", handleStoreBarcodeSubmit);
+  elements.storeResetBtn?.addEventListener("click", handleStoreReset);
+  elements.storeDiscount?.addEventListener("input", handleStoreDiscountChange);
+  elements.storeCheckoutForm?.addEventListener("submit", handleStoreCheckout);
   elements.tpeKeypad?.addEventListener("click", handleTpeKeypadClick);
   elements.tpeChargeBtn?.addEventListener("click", handleTpeCharge);
   elements.tpeManualBtn?.addEventListener("click", handleTpeManual);

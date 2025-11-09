@@ -327,8 +327,14 @@ input:checked + .slider::before {
 
 .store-product-actions {
   display: flex;
-  gap: 10px;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.store-product-actions strong {
+  font-size: 16px;
+  color: var(--text);
 }
 
 .store-cart {
@@ -376,6 +382,11 @@ input:checked + .slider::before {
   justify-content: space-between;
   align-items: center;
   gap: 12px;
+}
+
+.store-cart-line {
+  font-size: 13px;
+  color: var(--text-muted);
 }
 
 .store-cart-quantity {
