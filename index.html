@@ -244,13 +244,15 @@
         </div>
         <section class="panel">
           <form id="orderForm" class="form-grid">
-            <div class="field">
-              <label for="orderProduct">Produit</label>
-              <select id="orderProduct" required></select>
-            </div>
-            <div class="field">
-              <label for="orderQuantity">Quantité</label>
-              <input type="number" min="1" id="orderQuantity" required />
+            <div class="field field-full order-items">
+              <div class="order-items-header">
+                <label>Articles</label>
+                <button type="button" class="secondary order-add-item" id="orderAddItem">
+                  <span class="material-symbols-rounded">add</span>
+                  Ajouter un article
+                </button>
+              </div>
+              <div id="orderItemsContainer" class="order-items-container"></div>
             </div>
             <div class="field">
               <label for="orderCustomer">Client</label>

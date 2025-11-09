@@ -27,8 +27,8 @@ const elements = {
   productTableBody: document.querySelector("#productsTable tbody"),
   productsEmptyState: document.querySelector("#productsEmptyState"),
   orderForm: document.querySelector("#orderForm"),
-  orderProductSelect: document.querySelector("#orderProduct"),
-  orderQuantity: document.querySelector("#orderQuantity"),
+  orderItemsContainer: document.querySelector("#orderItemsContainer"),
+  orderAddItem: document.querySelector("#orderAddItem"),
   orderCustomer: document.querySelector("#orderCustomer"),
   orderNotes: document.querySelector("#orderNotes"),
   orderTableBody: document.querySelector("#ordersTable tbody"),
@@ -248,36 +248,90 @@ function buildStatusSelect(select, selectedStatus) {
 }
 
 function renderProductOptions() {
-  if (!elements.orderProductSelect) return;
-  elements.orderProductSelect.innerHTML = "";
-  if (!state.products.length) {
-    const option = document.createElement("option");
-    option.value = "";
-    option.textContent = "Ajoutez d'abord un produit";
-    option.disabled = true;
-    option.selected = true;
-    elements.orderProductSelect.appendChild(option);
-    elements.orderProductSelect.disabled = true;
-    return;
-  }
+  const container = elements.orderItemsContainer;
+  if (!container) return;
+  const selects = container.querySelectorAll(".order-item-select");
+  if (!selects.length) return;
 
-  const placeholder = document.createElement("option");
-  placeholder.value = "";
-  placeholder.textContent = "Choisissez un produit";
-  placeholder.disabled = true;
-  placeholder.selected = true;
-  elements.orderProductSelect.appendChild(placeholder);
-
-  state.products
+  const options = state.products
     .slice()
     .sort((a, b) => a.name.localeCompare(b.name, "fr"))
-    .forEach((product) => {
-      const option = document.createElement("option");
-      option.value = product.id;
-      option.textContent = `${product.name} • ${product.sku}`;
-      elements.orderProductSelect.appendChild(option);
-    });
-  elements.orderProductSelect.disabled = false;
+    .map((product) => `<option value="${product.id}">${product.name} • ${product.sku}</option>`)
+    .join("");
+
+  selects.forEach((select) => {
+    const current = select.value;
+    select.innerHTML = `<option value="" disabled selected>Choisissez un produit</option>${options}`;
+    if (current && state.products.some((product) => product.id === current)) {
+      select.value = current;
+    }
+  });
+  toggleOrderItemRemoveButtons();
+}
+
+function toggleOrderItemRemoveButtons() {
+  const container = elements.orderItemsContainer;
+  if (!container) return;
+  const rows = container.querySelectorAll(".order-item-row");
+  const disable = rows.length <= 1;
+  rows.forEach((row) => {
+    const removeBtn = row.querySelector(".order-item-remove");
+    if (removeBtn) {
+      removeBtn.disabled = disable;
+    }
+  });
+}
+
+function createOrderItemRow(productId = "", quantity = 1) {
+  const container = elements.orderItemsContainer;
+  if (!container) return;
+  const row = document.createElement("div");
+  row.className = "order-item-row";
+
+  const select = document.createElement("select");
+  select.className = "order-item-select";
+  select.required = true;
+
+  const qty = document.createElement("input");
+  qty.type = "number";
+  qty.min = "1";
+  qty.value = quantity;
+  qty.required = true;
+  qty.className = "order-item-qty";
+
+  const remove = document.createElement("button");
+  remove.type = "button";
+  remove.className = "order-item-remove";
+  remove.innerHTML = '<span class="material-symbols-rounded">close</span>';
+  remove.addEventListener("click", () => {
+    const rows = container.querySelectorAll(".order-item-row");
+    if (rows.length <= 1) {
+      select.value = "";
+      qty.value = "1";
+      return;
+    }
+    row.remove();
+    toggleOrderItemRemoveButtons();
+  });
+
+  row.append(select, qty, remove);
+  container.appendChild(row);
+  renderProductOptions();
+  if (productId) {
+    select.value = productId;
+  }
+  toggleOrderItemRemoveButtons();
+}
+
+function ensureOrderItemRows() {
+  const container = elements.orderItemsContainer;
+  if (!container) return;
+  if (!container.querySelector(".order-item-row")) {
+    createOrderItemRow();
+  } else {
+    renderProductOptions();
+    toggleOrderItemRemoveButtons();
+  }
 }
 
 function classifyStock(stock) {
@@ -1078,29 +1132,49 @@ function createProduct(formData) {
   };
 }
 
-function createOrder({ productId, quantity, customer, notes }) {
-  const product = state.products.find((item) => item.id === productId);
-  if (!product) throw new Error("Produit introuvable");
+function generateOrderReference() {
+  return `CMD-${Date.now().toString(36).toUpperCase()}`;
+}
+
+function createOrder({ items, customer, notes }) {
+  if (!Array.isArray(items) || !items.length) {
+    throw new Error("Aucun article dans la commande.");
+  }
+
+  const normalizedItems = items.map((item) => {
+    const product = state.products.find((productItem) => productItem.id === item.productId);
+    if (!product) {
+      throw new Error("Produit introuvable dans l'inventaire.");
+    }
+    const quantity = Math.max(1, Number.parseInt(item.quantity, 10) || 1);
+    return {
+      productId: product.id,
+      productName: product.name,
+      productSku: product.sku,
+      quantity,
+      unitPrice: product.price,
+    };
+  });
+
+  const firstItem = normalizedItems[0];
+  const totalAmount = normalizedItems.reduce(
+    (sum, item) => sum + (item.unitPrice ?? 0) * item.quantity,
+    0,
+  );
 
   return {
     id: generateId("ord"),
-    productId: product.id,
-    productSku: product.sku,
-    productName: product.name,
-    quantity,
+    reference: generateOrderReference(),
+    productId: firstItem.productId,
+    productSku: firstItem.productSku,
+    productName: firstItem.productName,
+    quantity: firstItem.quantity,
     customer,
     notes,
     status: "En préparation",
     createdAt: Date.now(),
-    items: [
-      {
-        productId: product.id,
-        productName: product.name,
-        productSku: product.sku,
-        quantity,
-        unitPrice: product.price,
-      },
-    ],
+    total: totalAmount,
+    items: normalizedItems,
     history: [
       {
         status: "En préparation",
@@ -1134,27 +1208,47 @@ function handleProductSubmit(event) {
 function handleOrderSubmit(event) {
   event.preventDefault();
   const form = event.currentTarget;
-  const productId = elements.orderProductSelect?.value;
-  if (!productId) {
-    alert("Sélectionnez un produit.");
+  const rows =
+    elements.orderItemsContainer?.querySelectorAll(".order-item-row") ?? form.querySelectorAll(".order-item-row");
+  if (!rows.length) {
+    alert("Ajoutez au moins un article à la commande.");
     return;
   }
-  const quantity = Number.parseInt(elements.orderQuantity?.value ?? form.orderQuantity.value, 10);
-  if (!Number.isInteger(quantity) || quantity <= 0) {
-    alert("La quantité doit être un nombre positif.");
-    return;
+
+  const items = [];
+  for (const row of rows) {
+    const select = row.querySelector(".order-item-select");
+    const qtyInput = row.querySelector(".order-item-qty");
+    const productId = select?.value;
+    const quantity = Number.parseInt(qtyInput?.value ?? "1", 10);
+    if (!productId) {
+      alert("Sélectionnez un produit pour chaque ligne.");
+      return;
+    }
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      alert("La quantité doit être un nombre positif.");
+      return;
+    }
+    items.push({ productId, quantity });
   }
+
   const customer = (elements.orderCustomer?.value ?? form.orderCustomer.value).trim();
   const notes = (elements.orderNotes?.value ?? form.orderNotes.value).trim();
 
-  const order = createOrder({ productId, quantity, customer, notes });
+  try {
+    const order = createOrder({ items, customer, notes });
   state.orders.push(order);
   saveState();
   renderOrders();
   updateHomeStats();
-  form.reset();
-  if (elements.orderProductSelect) {
-    elements.orderProductSelect.value = "";
+    form.reset();
+    if (elements.orderItemsContainer) {
+      elements.orderItemsContainer.innerHTML = "";
+      createOrderItemRow();
+    }
+    elements.orderCustomer?.focus();
+  } catch (error) {
+    alert(error.message || "Impossible de créer la commande.");
   }
 }
 
@@ -1813,6 +1907,7 @@ function exportOrders() {
 function attachEventListeners() {
   elements.productForm?.addEventListener("submit", handleProductSubmit);
   elements.orderForm?.addEventListener("submit", handleOrderSubmit);
+  elements.orderAddItem?.addEventListener("click", () => createOrderItemRow());
   elements.scanForm?.addEventListener("submit", handleScanSubmit);
   elements.clearScanResults?.addEventListener("click", clearScan);
   elements.drawerClose?.addEventListener("click", closeDrawer);
@@ -1866,6 +1961,7 @@ function attachEventListeners() {
 }
 
 function hydrateUI() {
+  ensureOrderItemRows();
   renderProducts();
   renderOrders();
   clearScan();
@@ -1884,6 +1980,7 @@ function init() {
   window.addEventListener("storage", (event) => {
     if (event.key === STORAGE_KEY) {
       loadState();
+      ensureOrderItemRows();
       renderProducts();
       renderOrders();
       renderStoreProducts();
