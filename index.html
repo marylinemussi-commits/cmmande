@@ -27,6 +27,7 @@
         <li><button type="button" class="nav-link" data-nav="orders">Commandes</button></li>
         <li><button type="button" class="nav-link" data-nav="pickup">Retrait colis</button></li>
         <li><button type="button" class="nav-link" data-nav="store">Caisse</button></li>
+        <li><button type="button" class="nav-link" data-nav="tpe">TPE</button></li>
       </ul>
       <div class="header-actions">
         <label class="switch">
@@ -88,6 +89,61 @@
             <p>Colis en attente de remise au client.</p>
           </article>
         </div>
+      </section>
+
+      <section class="page" data-page="tpe">
+        <div class="page-header">
+          <div>
+            <h2>Terminal de paiement (TPE)</h2>
+            <p>Saisissez un montant et encaissez via un terminal virtuel tactile.</p>
+          </div>
+          <div class="page-header-actions">
+            <button type="button" class="secondary icon-text" id="tpeReset">
+              <span class="material-symbols-rounded">restart_alt</span>
+              Réinitialiser
+            </button>
+          </div>
+        </div>
+        <section class="panel tpe-panel">
+          <div class="tpe-wrapper">
+            <div class="tpe-display">
+              <div class="tpe-screen">
+                <div class="tpe-label">Montant à encaisser</div>
+                <div class="tpe-amount" id="tpeAmount">0,00 €</div>
+                <div class="tpe-status" id="tpeStatus">En attente</div>
+              </div>
+              <div class="tpe-actions">
+                <button type="button" class="primary" id="tpeChargeBtn">Encaisser</button>
+                <button type="button" class="secondary" id="tpeManualBtn">Saisir manuellement</button>
+              </div>
+            </div>
+            <div class="tpe-keypad">
+              <button data-key="1">1</button>
+              <button data-key="2">2</button>
+              <button data-key="3">3</button>
+              <button data-key="4">4</button>
+              <button data-key="5">5</button>
+              <button data-key="6">6</button>
+              <button data-key="7">7</button>
+              <button data-key="8">8</button>
+              <button data-key="9">9</button>
+              <button data-key="00">00</button>
+              <button data-key="0">0</button>
+              <button class="danger" data-key="clear">
+                <span class="material-symbols-rounded">backspace</span>
+              </button>
+            </div>
+          </div>
+          <div class="tpe-history">
+            <header>
+              <h3>Historique des encaissements</h3>
+              <button type="button" class="secondary" id="tpeHistoryClear">Vider</button>
+            </header>
+            <ul id="tpeHistoryList" class="tpe-history-list">
+              <li class="empty">Aucun paiement enregistré pour le moment.</li>
+            </ul>
+          </div>
+        </section>
       </section>
 
       <section class="page" data-page="inventory">

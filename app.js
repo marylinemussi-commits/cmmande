@@ -14,6 +14,7 @@ const STATUS_OPTIONS = [
 const state = {
   products: [],
   orders: [],
+  tpeHistory: [],
 };
 
 const elements = {
@@ -62,6 +63,14 @@ const elements = {
   homeProductsCount: document.querySelector("#statProductsCount"),
   homeOrdersOpen: document.querySelector("#statOrdersOpen"),
   homePickupReady: document.querySelector("#statPickupReady"),
+  tpeAmount: document.querySelector("#tpeAmount"),
+  tpeStatus: document.querySelector("#tpeStatus"),
+  tpeReset: document.querySelector("#tpeReset"),
+  tpeChargeBtn: document.querySelector("#tpeChargeBtn"),
+  tpeManualBtn: document.querySelector("#tpeManualBtn"),
+  tpeKeypad: document.querySelector(".tpe-keypad"),
+  tpeHistoryList: document.querySelector("#tpeHistoryList"),
+  tpeHistoryClear: document.querySelector("#tpeHistoryClear"),
 };
 
 const cameraState = {
@@ -102,6 +111,8 @@ let lastScanCode = "";
 let lastScanMode = "inventory";
 let activeDrawerProductId = null;
 let activeDrawerOrderId = null;
+let tpeBuffer = "0";
+let tpeHistory = [];
 
 function getProductInitial(name) {
   if (!name) return "?";
@@ -115,6 +126,7 @@ function loadState() {
     const parsed = JSON.parse(stored);
     state.products = parsed.products ?? [];
     state.orders = parsed.orders ?? [];
+    state.tpeHistory = parsed.tpeHistory ?? [];
   } catch (error) {
     console.error("Impossible de charger l'état sauvegardé :", error);
   }
@@ -430,6 +442,162 @@ function refreshDrawerIfNeeded(product) {
     ? state.orders.find((order) => order.id === activeDrawerOrderId)
     : undefined;
   openProductDrawer(product, relatedOrder);
+}
+
+function getTpeAmountCents() {
+  const cents = Number.parseInt(tpeBuffer, 10);
+  return Number.isFinite(cents) && cents > 0 ? cents : 0;
+}
+
+function setTpeBufferFromCents(cents) {
+  const safe = Math.max(0, Math.round(cents));
+  tpeBuffer = safe.toString();
+  if (!tpeBuffer.length) {
+    tpeBuffer = "0";
+  }
+  if (tpeBuffer.length > 9) {
+    tpeBuffer = tpeBuffer.slice(0, 9);
+  }
+  updateTpeDisplay();
+}
+
+function updateTpeDisplay() {
+  if (elements.tpeAmount) {
+    elements.tpeAmount.textContent = formatCurrency(getTpeAmountCents() / 100);
+  }
+}
+
+function setTpeStatus(message) {
+  if (elements.tpeStatus) {
+    elements.tpeStatus.textContent = message;
+  }
+}
+
+function appendTpeDigits(digits) {
+  if (!/^\d+$/.test(digits)) return;
+  if (tpeBuffer === "0") {
+    const cleaned = digits === "00" ? "0" : digits.replace(/^0+/, "") || "0";
+    tpeBuffer = cleaned;
+  } else {
+    tpeBuffer = `${tpeBuffer}${digits}`;
+  }
+  if (tpeBuffer.length > 9) {
+    tpeBuffer = tpeBuffer.slice(0, 9);
+  }
+  updateTpeDisplay();
+  setTpeStatus("En attente");
+}
+
+function removeTpeDigit() {
+  if (tpeBuffer.length <= 1) {
+    tpeBuffer = "0";
+  } else {
+    tpeBuffer = tpeBuffer.slice(0, -1);
+  }
+  updateTpeDisplay();
+  setTpeStatus("En attente");
+}
+
+function handleTpeKeypadClick(event) {
+  const button = event.target.closest("button[data-key]");
+  if (!button) return;
+  const { key } = button.dataset;
+  if (key === "clear") {
+    removeTpeDigit();
+    return;
+  }
+  appendTpeDigits(key);
+}
+
+function renderTpeHistory() {
+  if (!elements.tpeHistoryList) return;
+  if (!state.tpeHistory.length) {
+    elements.tpeHistoryList.innerHTML =
+      '<li class="empty">Aucun paiement enregistré pour le moment.</li>';
+    return;
+  }
+
+  elements.tpeHistoryList.innerHTML = state.tpeHistory
+    .slice()
+    .sort((a, b) => b.date - a.date)
+    .map(
+      (entry) => `
+        <li>
+          <span>${formatCurrency(entry.amount / 100)}</span>
+          <small>${new Intl.DateTimeFormat("fr-FR", {
+            hour: "2-digit",
+            minute: "2-digit",
+            day: "2-digit",
+            month: "2-digit",
+          }).format(entry.date)}</small>
+        </li>
+      `,
+    )
+    .join("");
+}
+
+function addTpeHistoryEntry(amountCents) {
+  const entry = {
+    id: generateId("tpe"),
+    amount: amountCents,
+    date: Date.now(),
+  };
+  state.tpeHistory.unshift(entry);
+  state.tpeHistory = state.tpeHistory.slice(0, 50);
+  saveState();
+  renderTpeHistory();
+}
+
+function handleTpeCharge() {
+  const cents = getTpeAmountCents();
+  if (cents <= 0) {
+    setTpeStatus("Montant invalide");
+    return;
+  }
+  setTpeStatus("Paiement en cours…");
+  setTimeout(() => {
+    addTpeHistoryEntry(cents);
+    setTpeStatus("Paiement accepté");
+    setTpeBufferFromCents(0);
+  }, 500);
+}
+
+function handleTpeManual() {
+  const currentValue = (getTpeAmountCents() / 100).toFixed(2);
+  const input = window.prompt("Montant à encaisser (€)", currentValue);
+  if (input === null) return;
+  const normalized = input.replace(",", ".").replace(/[^\d.]/g, "");
+  const amount = Number.parseFloat(normalized);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    alert("Veuillez saisir un montant supérieur à zéro.");
+    return;
+  }
+  const cents = Math.round(amount * 100);
+  setTpeBufferFromCents(cents);
+  setTpeStatus("Montant prêt pour encaissement");
+}
+
+function handleTpeReset() {
+  setTpeBufferFromCents(0);
+  setTpeStatus("En attente");
+}
+
+function handleTpeHistoryClear() {
+  if (!state.tpeHistory.length) {
+    setTpeStatus("Historique déjà vide");
+    return;
+  }
+  if (!window.confirm("Vider l'historique des encaissements ?")) return;
+  state.tpeHistory = [];
+  saveState();
+  renderTpeHistory();
+  setTpeStatus("Historique vidé");
+}
+
+function initializeTpe() {
+  setTpeBufferFromCents(getTpeAmountCents());
+  renderTpeHistory();
+  setTpeStatus("En attente");
 }
 
 function deleteOrder(orderId) {
@@ -1202,6 +1370,11 @@ function attachEventListeners() {
   elements.productImageClear?.addEventListener("click", handleProductImageClear);
   elements.scanSkuBtn?.addEventListener("click", () => openSkuScanner(elements.productSkuInput));
   elements.pickupScanBtn?.addEventListener("click", () => openSkuScanner(elements.scanInput));
+  elements.tpeKeypad?.addEventListener("click", handleTpeKeypadClick);
+  elements.tpeChargeBtn?.addEventListener("click", handleTpeCharge);
+  elements.tpeManualBtn?.addEventListener("click", handleTpeManual);
+  elements.tpeReset?.addEventListener("click", handleTpeReset);
+  elements.tpeHistoryClear?.addEventListener("click", handleTpeHistoryClear);
   elements.scanModalClose?.addEventListener("click", closeSkuScanner);
   elements.scanModalCancel?.addEventListener("click", closeSkuScanner);
   elements.scanModalOverlay?.addEventListener("click", (event) => {
@@ -1235,6 +1408,7 @@ function hydrateUI() {
   renderOrders();
   clearScan();
   resetProductImagePreview();
+  initializeTpe();
   setActivePage("home");
 }
 
