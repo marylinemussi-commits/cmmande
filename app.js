@@ -1880,6 +1880,17 @@ function init() {
   loadState();
   attachEventListeners();
   hydrateUI();
+
+  window.addEventListener("storage", (event) => {
+    if (event.key === STORAGE_KEY) {
+      loadState();
+      renderProducts();
+      renderOrders();
+      renderStoreProducts();
+      renderStoreCart();
+      updateHomeStats();
+    }
+  });
 }
 
 init();
