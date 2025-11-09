@@ -14,6 +14,7 @@ const STATUS_OPTIONS = [
 const state = {
   products: [],
   orders: [],
+  posCart: [],
 };
 
 const elements = {
@@ -31,6 +32,21 @@ const elements = {
   orderNotes: document.querySelector("#orderNotes"),
   orderTableBody: document.querySelector("#ordersTable tbody"),
   ordersEmptyState: document.querySelector("#ordersEmptyState"),
+  posForm: document.querySelector("#posForm"),
+  posProductSelect: document.querySelector("#posProductSelect"),
+  posBarcodeInput: document.querySelector("#posBarcodeInput"),
+  posCustomName: document.querySelector("#posCustomName"),
+  posUnitPrice: document.querySelector("#posUnitPrice"),
+  posQuantity: document.querySelector("#posQuantity"),
+  posDiscount: document.querySelector("#posDiscount"),
+  posClearForm: document.querySelector("#posClearForm"),
+  posScanBtn: document.querySelector("#posScanBtn"),
+  posCartBody: document.querySelector("#posCartBody"),
+  posCartEmpty: document.querySelector("#posCartEmpty"),
+  posCartTotal: document.querySelector("#posCartTotal"),
+  posCustomer: document.querySelector("#posCustomer"),
+  posClearCart: document.querySelector("#posClearCart"),
+  posCheckoutBtn: document.querySelector("#posCheckoutBtn"),
   scanForm: document.querySelector("#scanForm"),
   scanInput: document.querySelector("#scanInput"),
   scanResult: document.querySelector("#scanResult"),
@@ -111,13 +127,19 @@ function loadState() {
     const parsed = JSON.parse(stored);
     state.products = parsed.products ?? [];
     state.orders = parsed.orders ?? [];
+    state.posCart = parsed.posCart ?? [];
   } catch (error) {
     console.error("Impossible de charger l'état sauvegardé :", error);
   }
 }
 
 function saveState() {
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  const payload = {
+    products: state.products,
+    orders: state.orders,
+    posCart: state.posCart,
+  };
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
 }
 
 function loadTheme() {
@@ -148,6 +170,10 @@ function setActivePage(pageId) {
     clearScan();
     setTimeout(() => {
       elements.scanInput?.focus();
+    }, 150);
+  } else if (pageId === "pos") {
+    setTimeout(() => {
+      elements.posBarcodeInput?.focus();
     }, 150);
   }
   window.scrollTo({ top: 0, behavior: "smooth" });
@@ -180,8 +206,224 @@ function getOrderItems(order) {
       productSku: order.productSku,
       quantity: order.quantity ?? 0,
       unitPrice: order.unitPrice ?? 0,
+      discount: 0,
     },
   ];
+}
+
+function getProductById(productId) {
+  return state.products.find((product) => product.id === productId);
+}
+
+function getProductBySku(sku) {
+  return state.products.find((product) => product.sku === sku);
+}
+
+function prefillPosFields(product) {
+  if (!product) return;
+  if (elements.posProductSelect) {
+    elements.posProductSelect.value = product.id;
+  }
+  if (elements.posUnitPrice) {
+    elements.posUnitPrice.value = product.price?.toString().replace(".", ",") ?? product.price ?? "";
+  }
+  if (elements.posCustomName && !elements.posCustomName.value) {
+    elements.posCustomName.value = product.name;
+  }
+  if (elements.posBarcodeInput) {
+    elements.posBarcodeInput.value = product.sku ?? "";
+  }
+}
+
+function handlePosProductChange() {
+  const productId = elements.posProductSelect?.value;
+  if (!productId) {
+    return;
+  }
+  const product = getProductById(productId);
+  prefillPosFields(product);
+}
+
+function handlePosBarcodeValue(code) {
+  if (!code) return;
+  const product = getProductBySku(code);
+  if (product) {
+    prefillPosFields(product);
+  }
+}
+
+function handlePosBarcodeInput() {
+  const code = elements.posBarcodeInput?.value.trim();
+  handlePosBarcodeValue(code);
+}
+
+function handlePosFormSubmit(event) {
+  event.preventDefault();
+  const productId = elements.posProductSelect?.value || null;
+  const quantity = Number.parseInt(elements.posQuantity?.value ?? "1", 10) || 1;
+  const discount = Math.min(
+    100,
+    Math.max(0, Number.parseFloat(elements.posDiscount?.value ?? "0")),
+  );
+  const customName = elements.posCustomName?.value.trim();
+  const barcode = elements.posBarcodeInput?.value.trim();
+  const product = productId ? getProductById(productId) : barcode ? getProductBySku(barcode) : null;
+  const unitPriceInputRaw = elements.posUnitPrice?.value.replace(",", ".");
+  let unitPrice = Number.parseFloat(unitPriceInputRaw);
+  if (!Number.isFinite(unitPrice) || unitPrice < 0) {
+    unitPrice = product?.price ?? 0;
+  }
+  if (!product && !customName) {
+    alert("Sélectionnez un produit existant ou saisissez un nom personnalisé.");
+    return;
+  }
+  if (!Number.isFinite(unitPrice) || unitPrice <= 0) {
+    alert("Veuillez renseigner un prix unitaire valide.");
+    return;
+  }
+
+  state.posCart.push({
+    id: generateId("pos"),
+    productId: product?.id ?? null,
+    productSku: product?.sku ?? barcode ?? "",
+    productName: product?.name ?? customName ?? "Article",
+    unitPrice,
+    quantity,
+    discount,
+  });
+  renderPosCart();
+  saveState();
+  if (elements.posQuantity) elements.posQuantity.value = "1";
+  if (elements.posDiscount) elements.posDiscount.value = "0";
+  if (!productId && elements.posCustomName) elements.posCustomName.value = "";
+  if (!productId && elements.posUnitPrice) elements.posUnitPrice.value = "";
+  if (!productId && elements.posBarcodeInput) elements.posBarcodeInput.value = "";
+}
+
+function renderPosCart() {
+  const body = elements.posCartBody;
+  const emptyMessage = elements.posCartEmpty;
+  if (!body) return;
+  body.innerHTML = "";
+  if (!state.posCart.length) {
+    emptyMessage?.classList.remove("hidden");
+    if (elements.posCartTotal) {
+      elements.posCartTotal.textContent = formatCurrency(0);
+    }
+    return;
+  }
+  emptyMessage?.classList.add("hidden");
+
+  let total = 0;
+  state.posCart.forEach((item, index) => {
+    const lineTotal = item.unitPrice * item.quantity * (1 - (item.discount ?? 0) / 100);
+    total += lineTotal;
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${item.productName}</td>
+      <td>${item.quantity}</td>
+      <td>${formatCurrency(item.unitPrice)}</td>
+      <td>${item.discount ?? 0}%</td>
+      <td>${formatCurrency(lineTotal)}</td>
+      <td><button type="button" class="icon-button" data-pos-remove="${index}"><span class="material-symbols-rounded">delete</span></button></td>
+    `;
+    body.appendChild(tr);
+  });
+  if (elements.posCartTotal) {
+    elements.posCartTotal.textContent = formatCurrency(total);
+  }
+
+  body.querySelectorAll("[data-pos-remove]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const index = Number.parseInt(button.dataset.posRemove ?? "-1", 10);
+      if (index >= 0) {
+        state.posCart.splice(index, 1);
+        renderPosCart();
+        saveState();
+      }
+    });
+  });
+}
+
+function handlePosClearForm() {
+  elements.posForm?.reset();
+  if (elements.posUnitPrice) {
+    elements.posUnitPrice.value = "";
+  }
+  if (elements.posCustomName) {
+    elements.posCustomName.value = "";
+  }
+  if (elements.posProductSelect) {
+    elements.posProductSelect.value = "";
+  }
+}
+
+function handlePosClearCart() {
+  state.posCart = [];
+  renderPosCart();
+  saveState();
+}
+
+function createPosOrder(cartItems, customer) {
+  const now = Date.now();
+  const totalQuantity = cartItems.reduce((sum, item) => sum + item.quantity, 0);
+  const totalAmount = cartItems.reduce(
+    (sum, item) => sum + item.unitPrice * item.quantity * (1 - (item.discount ?? 0) / 100),
+    0,
+  );
+  const firstItem = cartItems[0];
+  return {
+    id: generateId("ord"),
+    reference: `POS-${now.toString(36).toUpperCase()}`,
+    productId: firstItem.productId,
+    productSku: firstItem.productSku,
+    productName: firstItem.productName,
+    quantity: totalQuantity,
+    customer: customer || "Vente comptoir",
+    notes: "Commande enregistrée via le point de vente.",
+    status: "Remis au client",
+    createdAt: now,
+    items: cartItems.map((item) => ({
+      productId: item.productId,
+      productName: item.productName,
+      productSku: item.productSku,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      discount: item.discount ?? 0,
+    })),
+    total: totalAmount,
+    history: [
+      {
+        status: "En attente",
+        date: now,
+        note: "Commande créée via le point de vente.",
+      },
+      {
+        status: "Remis au client",
+        date: now,
+        note: "Commande remise immédiatement au client.",
+      },
+    ],
+  };
+}
+
+function handlePosCheckout() {
+  if (!state.posCart.length) {
+    alert("Le panier est vide.");
+    return;
+  }
+  const customer = elements.posCustomer?.value.trim();
+  const order = createPosOrder(state.posCart, customer);
+  state.orders.push(order);
+  state.posCart = [];
+  saveState();
+  renderOrders();
+  updateHomeStats();
+  renderPosCart();
+  if (elements.posCustomer) {
+    elements.posCustomer.value = "";
+  }
+  alert(`Commande ${order.reference} enregistrée.`);
 }
 
 function formatCurrency(value) {
@@ -204,26 +446,26 @@ function buildStatusSelect(select, selectedStatus) {
   });
 }
 
-function renderProductOptions() {
-  if (!elements.orderProductSelect) return;
-  elements.orderProductSelect.innerHTML = "";
+function populateProductSelect(select, placeholder) {
+  if (!select) return;
+  select.innerHTML = "";
   if (!state.products.length) {
     const option = document.createElement("option");
     option.value = "";
     option.textContent = "Ajoutez d'abord un produit";
     option.disabled = true;
     option.selected = true;
-    elements.orderProductSelect.appendChild(option);
-    elements.orderProductSelect.disabled = true;
+    select.appendChild(option);
+    select.disabled = true;
     return;
   }
 
-  const placeholder = document.createElement("option");
-  placeholder.value = "";
-  placeholder.textContent = "Choisissez un produit";
-  placeholder.disabled = true;
-  placeholder.selected = true;
-  elements.orderProductSelect.appendChild(placeholder);
+  const placeholderOption = document.createElement("option");
+  placeholderOption.value = "";
+  placeholderOption.textContent = placeholder;
+  placeholderOption.disabled = true;
+  placeholderOption.selected = true;
+  select.appendChild(placeholderOption);
 
   state.products
     .slice()
@@ -232,9 +474,16 @@ function renderProductOptions() {
       const option = document.createElement("option");
       option.value = product.id;
       option.textContent = `${product.name} • ${product.sku}`;
-      elements.orderProductSelect.appendChild(option);
+      option.dataset.price = product.price;
+      option.dataset.sku = product.sku;
+      select.appendChild(option);
     });
-  elements.orderProductSelect.disabled = false;
+  select.disabled = false;
+}
+
+function renderProductOptions() {
+  populateProductSelect(elements.orderProductSelect, "Choisissez un produit");
+  populateProductSelect(elements.posProductSelect, "Sélectionnez un produit catalogue");
 }
 
 function classifyStock(stock) {
@@ -245,6 +494,7 @@ function classifyStock(stock) {
 
 function renderProducts() {
   elements.productTableBody.innerHTML = "";
+  renderProductOptions();
   if (!state.products.length) {
     elements.productsEmptyState.classList.remove("hidden");
     updateHomeStats();
@@ -295,7 +545,6 @@ function renderProducts() {
       elements.productTableBody.appendChild(row);
     });
   updateHomeStats();
-  renderProductOptions();
 }
 
 function renderOrders() {
@@ -422,8 +671,10 @@ function createOrder({ productId, quantity, customer, notes }) {
         productSku: product.sku,
         quantity,
         unitPrice: product.price,
+        discount: 0,
       },
     ],
+    total: product.price * quantity,
     history: [
       {
         status: "En préparation",
@@ -908,6 +1159,9 @@ function handleSkuScanSubmit(event) {
   closeSkuScanner();
   if (target === elements.scanInput) {
     processScanValue(code, "pickup");
+  } else if (target === elements.posBarcodeInput) {
+    handlePosBarcodeValue(code);
+    elements.posQuantity?.focus();
   } else {
     target.focus();
   }
@@ -1123,6 +1377,13 @@ function exportOrders() {
 function attachEventListeners() {
   elements.productForm?.addEventListener("submit", handleProductSubmit);
   elements.orderForm?.addEventListener("submit", handleOrderSubmit);
+  elements.posForm?.addEventListener("submit", handlePosFormSubmit);
+  elements.posProductSelect?.addEventListener("change", handlePosProductChange);
+  elements.posBarcodeInput?.addEventListener("change", handlePosBarcodeInput);
+  elements.posClearForm?.addEventListener("click", handlePosClearForm);
+  elements.posClearCart?.addEventListener("click", handlePosClearCart);
+  elements.posCheckoutBtn?.addEventListener("click", handlePosCheckout);
+  elements.posScanBtn?.addEventListener("click", () => openSkuScanner(elements.posBarcodeInput));
   elements.scanForm?.addEventListener("submit", handleScanSubmit);
   elements.clearScanResults?.addEventListener("click", clearScan);
   elements.drawerClose?.addEventListener("click", closeDrawer);
@@ -1165,6 +1426,7 @@ function attachEventListeners() {
 function hydrateUI() {
   renderProducts();
   renderOrders();
+  renderPosCart();
   clearScan();
   resetProductImagePreview();
   setActivePage("home");
@@ -1173,8 +1435,13 @@ function hydrateUI() {
 function init() {
   loadTheme();
   loadState();
+  renderProducts();
+  renderOrders();
+  renderPosCart();
+  clearScan();
+  resetProductImagePreview();
+  setActivePage("home");
   attachEventListeners();
-  hydrateUI();
 }
 
 init();
@@ -1221,6 +1488,9 @@ async function startWithBarcodeDetector(videoElement) {
             target.value = value;
             if (target === elements.scanInput) {
               processScanValue(value, "pickup");
+            } else if (target === elements.posBarcodeInput) {
+              handlePosBarcodeValue(value);
+              elements.posQuantity?.focus();
             }
             closeSkuScanner();
             return;
@@ -1308,6 +1578,9 @@ async function startWithZxing(videoElement) {
           target.value = value;
           if (target === elements.scanInput) {
             processScanValue(value, "pickup");
+          } else if (target === elements.posBarcodeInput) {
+            handlePosBarcodeValue(value);
+            elements.posQuantity?.focus();
           }
           closeSkuScanner();
         }

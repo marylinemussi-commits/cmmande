@@ -25,6 +25,7 @@
         <li><button type="button" class="nav-link active" data-nav="home">Accueil</button></li>
         <li><button type="button" class="nav-link" data-nav="inventory">Inventaire</button></li>
         <li><button type="button" class="nav-link" data-nav="orders">Commandes</button></li>
+        <li><button type="button" class="nav-link" data-nav="pos">Point de vente</button></li>
         <li><button type="button" class="nav-link" data-nav="pickup">Retrait colis</button></li>
       </ul>
       <div class="header-actions">
@@ -51,6 +52,9 @@
               </button>
               <button type="button" class="hero-button secondary" data-nav="pickup">
                 Passer en mode retrait
+              </button>
+              <button type="button" class="hero-button secondary" data-nav="pos">
+                Ouvrir le point de vente
               </button>
             </div>
           </div>
@@ -223,6 +227,98 @@
             <p class="empty-state" id="ordersEmptyState">
               Pas encore de commandes. Ajoutez-en une pour commencer le suivi.
             </p>
+          </div>
+        </section>
+      </section>
+
+      <section class="page" data-page="pos">
+        <div class="page-header">
+          <div>
+            <h2>Point de vente</h2>
+            <p>Simulez une caisse en magasin : scannez, appliquez une remise, encaissez.</p>
+          </div>
+        </div>
+        <section class="panel pos-panel">
+          <form id="posForm" class="pos-form">
+            <div class="pos-field-group">
+              <div class="field">
+                <label for="posProductSelect">Produit catalogue</label>
+                <div class="input-with-button">
+                  <select id="posProductSelect">
+                    <option value="">Sélectionnez un produit existant</option>
+                  </select>
+                  <button type="button" class="secondary icon-text compact-button" id="posScanBtn">
+                    <span class="material-symbols-rounded">qr_code_scanner</span>
+                    Scanner
+                  </button>
+                </div>
+              </div>
+              <div class="field">
+                <label for="posBarcodeInput">Code-barres</label>
+                <input type="text" id="posBarcodeInput" placeholder="Scannez ou saisissez le code" />
+              </div>
+            </div>
+            <div class="pos-field-group two-columns">
+              <div class="field">
+                <label for="posCustomName">Nom personnalisé</label>
+                <input type="text" id="posCustomName" placeholder="Laisser vide pour utiliser le produit sélectionné" />
+              </div>
+              <div class="field">
+                <label for="posUnitPrice">Prix unitaire (€)</label>
+                <input type="number" min="0" step="0.01" id="posUnitPrice" placeholder="0,00" />
+              </div>
+            </div>
+            <div class="pos-field-group two-columns">
+              <div class="field">
+                <label for="posQuantity">Quantité</label>
+                <input type="number" min="1" value="1" id="posQuantity" required />
+              </div>
+              <div class="field">
+                <label for="posDiscount">Remise (%)</label>
+                <input type="number" min="0" max="100" value="0" id="posDiscount" />
+              </div>
+            </div>
+            <div class="pos-actions-line">
+              <button type="submit">Ajouter au panier</button>
+              <button type="button" class="secondary" id="posClearForm">Vider le formulaire</button>
+            </div>
+          </form>
+        </section>
+        <section class="panel">
+          <header class="pos-cart-header">
+            <div>
+              <h3>Panier</h3>
+              <p>Articles en attente d’encaissement</p>
+            </div>
+            <div class="pos-cart-total">
+              Total TTC : <strong id="posCartTotal">0,00&nbsp;€</strong>
+            </div>
+          </header>
+          <div class="table-wrapper">
+            <table id="posCartTable">
+              <thead>
+                <tr>
+                  <th>Article</th>
+                  <th>Qté</th>
+                  <th>PU</th>
+                  <th>Remise</th>
+                  <th>Total</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="posCartBody"></tbody>
+            </table>
+            <p class="empty-state hidden" id="posCartEmpty">Panier vide pour le moment.</p>
+          </div>
+          <div class="pos-cart-actions">
+            <div class="field">
+              <label for="posCustomer">Client (optionnel)</label>
+              <input type="text" id="posCustomer" placeholder="Nom du client" />
+            </div>
+            <div class="pos-cart-buttons">
+              <button type="button" class="secondary" id="posClearCart">Vider le panier</button>
+              <button type="button" id="posCheckoutBtn">Encaisser</button>
+            </div>
           </div>
         </section>
       </section>

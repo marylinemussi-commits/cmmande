@@ -570,6 +570,119 @@ button.icon-button:hover {
   margin-bottom: 24px;
 }
 
+.pos-panel {
+  background: linear-gradient(135deg, rgba(101, 89, 245, 0.06), rgba(59, 178, 115, 0.06));
+}
+
+.pos-form {
+  display: grid;
+  gap: 18px;
+}
+
+.pos-field-group {
+  display: grid;
+  gap: 16px;
+}
+
+.pos-field-group.two-columns {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.pos-actions-line {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.pos-actions-line button:first-child {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-xs);
+  padding: 10px 18px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pos-actions-line button:first-child:hover {
+  background: var(--accent-strong);
+}
+
+.pos-cart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.pos-cart-total strong {
+  font-size: 20px;
+  color: var(--accent-strong);
+}
+
+.pos-cart-actions {
+  margin-top: 20px;
+  display: grid;
+  gap: 18px;
+}
+
+.pos-cart-actions .field {
+  max-width: 320px;
+}
+
+.pos-cart-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.pos-cart-buttons button {
+  border: none;
+  border-radius: var(--radius-xs);
+  padding: 12px 18px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pos-cart-buttons button#posCheckoutBtn {
+  background: var(--accent);
+  color: #fff;
+}
+
+.pos-cart-buttons button#posCheckoutBtn:hover {
+  background: var(--accent-strong);
+}
+
+.pos-cart-buttons button#posClearCart {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+}
+
+.pos-cart-buttons button#posClearCart:hover {
+  border-color: var(--accent);
+  color: var(--accent-strong);
+}
+
+.pos-cart-empty {
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.pos-panel table tbody td {
+  font-size: 14px;
+}
+
+.pos-panel .icon-button {
+  color: var(--danger, #e45858);
+}
+
+.pos-panel .icon-button:hover {
+  color: var(--accent-strong);
+}
+
 .field {
   display: flex;
   flex-direction: column;
