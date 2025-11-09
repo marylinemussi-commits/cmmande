@@ -64,6 +64,9 @@ const elements = {
   homeProductsCount: document.querySelector("#statProductsCount"),
   homeOrdersOpen: document.querySelector("#statOrdersOpen"),
   homePickupReady: document.querySelector("#statPickupReady"),
+  storeMetricProducts: document.querySelector("#storeMetricProducts"),
+  storeMetricCart: document.querySelector("#storeMetricCart"),
+  storeMetricTotal: document.querySelector("#storeMetricTotal"),
   storeProductsList: document.querySelector("#storeProductsList"),
   storeSearch: document.querySelector("#storeSearch"),
   storeBarcodeInput: document.querySelector("#storeBarcodeInput"),
@@ -126,6 +129,12 @@ let lastScanMode = "inventory";
 let activeDrawerProductId = null;
 let activeDrawerOrderId = null;
 let tpeBuffer = "0";
+let storeTotals = {
+  subtotal: 0,
+  discountValue: 0,
+  total: 0,
+  quantity: 0,
+};
 
 function getProductInitial(name) {
   if (!name) return "?";
@@ -468,6 +477,18 @@ function refreshDrawerIfNeeded(product) {
   openProductDrawer(product, relatedOrder);
 }
 
+function updateStoreMetrics() {
+  if (elements.storeMetricProducts) {
+    elements.storeMetricProducts.textContent = state.products.length.toString();
+  }
+  if (elements.storeMetricCart) {
+    elements.storeMetricCart.textContent = storeTotals.quantity.toString();
+  }
+  if (elements.storeMetricTotal) {
+    elements.storeMetricTotal.textContent = formatCurrency(storeTotals.total || 0);
+  }
+}
+
 function normalizeStoreCart() {
   let changed = false;
   state.storeCart = state.storeCart.filter((item) => {
@@ -508,14 +529,24 @@ function getStoreDiscountRate() {
 }
 
 function updateStoreTotals() {
-  const subtotal = state.storeCart.reduce((sum, item) => {
+  let subtotal = 0;
+  let quantity = 0;
+  state.storeCart.forEach((item) => {
     const product = state.products.find((p) => p.id === item.productId);
-    if (!product) return sum;
-    return sum + (product.price ?? 0) * item.quantity;
-  }, 0);
+    if (!product) return;
+    subtotal += (product.price ?? 0) * item.quantity;
+    quantity += item.quantity;
+  });
   const discountRate = getStoreDiscountRate();
   const discountValue = Math.min(subtotal, (subtotal * discountRate) / 100);
   const total = Math.max(0, subtotal - discountValue);
+
+  storeTotals = {
+    subtotal,
+    discountValue,
+    total,
+    quantity,
+  };
 
   if (elements.storeSubtotal) {
     elements.storeSubtotal.textContent = formatCurrency(subtotal);
@@ -530,7 +561,8 @@ function updateStoreTotals() {
     elements.storeCheckoutButton.disabled = state.storeCart.length === 0;
   }
 
-  return { subtotal, discountValue, total };
+  updateStoreMetrics();
+  return { subtotal, discountValue, total, quantity };
 }
 
 function renderStoreProducts() {
@@ -551,6 +583,7 @@ function renderStoreProducts() {
   if (!products.length) {
     elements.storeProductsList.innerHTML =
       '<p class="empty-state">Aucun produit. Ajoutez des articles dans l’onglet Inventaire.</p>';
+    updateStoreMetrics();
     return;
   }
 
@@ -559,41 +592,62 @@ function renderStoreProducts() {
     const card = document.createElement("article");
     card.className = "store-product-card";
 
-    const header = document.createElement("div");
-    header.className = "store-product-header";
+    const main = document.createElement("div");
+    main.className = "store-product-main";
+    const avatar = document.createElement("div");
+    avatar.className = "store-product-avatar";
+    if (product.image?.dataUrl) {
+      const img = document.createElement("img");
+      img.src = product.image.dataUrl;
+      img.alt = product.image.name || product.name;
+      avatar.appendChild(img);
+    } else {
+      const fallback = document.createElement("span");
+      fallback.textContent = getProductInitial(product.name);
+      avatar.appendChild(fallback);
+    }
+    const mainInfo = document.createElement("div");
     const title = document.createElement("h4");
     title.textContent = product.name;
+    const description = document.createElement("p");
+    description.textContent = product.description || "—";
+    const sku = document.createElement("span");
+    sku.className = "store-product-sku";
+    sku.textContent = `SKU ${product.sku}`;
+    mainInfo.append(title, description, sku);
+    main.append(avatar, mainInfo);
+
+    const footer = document.createElement("div");
+    footer.className = "store-product-footer";
+    const priceWrap = document.createElement("div");
+    priceWrap.className = "store-product-footer-info";
+    const price = document.createElement("span");
+    price.className = "store-product-price";
+    price.textContent = formatCurrency(product.price ?? 0);
     const badge = document.createElement("span");
     badge.className = `badge ${classifyStock(product.stock)}`;
     badge.textContent = `${product.stock} en stock`;
-    header.append(title, badge);
-
-    const info = document.createElement("div");
-    info.className = "store-product-info";
-    info.textContent = product.description || "—";
-
-    const footer = document.createElement("div");
-    footer.className = "store-product-actions";
-    const price = document.createElement("strong");
-    price.textContent = formatCurrency(product.price ?? 0);
+    priceWrap.append(price, badge);
     const button = document.createElement("button");
     button.type = "button";
-    button.className = "secondary";
+    button.className = "secondary store-product-button";
     button.dataset.action = "add";
     button.dataset.id = product.id;
     button.textContent = "Ajouter";
+    button.title = "Ajouter au ticket";
     if (!product.stock) {
       button.disabled = true;
       button.textContent = "Rupture";
     }
-    footer.append(price, button);
+    footer.append(priceWrap, button);
 
-    card.append(header, info, footer);
+    card.append(main, footer);
     fragments.appendChild(card);
   });
 
   elements.storeProductsList.innerHTML = "";
   elements.storeProductsList.appendChild(fragments);
+  updateStoreMetrics();
 }
 
 function renderStoreCart() {
@@ -624,12 +678,19 @@ function renderStoreCart() {
     removeBtn.className = "icon-button";
     removeBtn.dataset.action = "remove";
     removeBtn.dataset.id = item.productId;
+    removeBtn.title = "Supprimer la ligne";
     removeBtn.innerHTML = '<span class="material-symbols-rounded">delete</span>';
     header.append(title, removeBtn);
 
-    const details = document.createElement("div");
-    details.className = "store-cart-line";
-    details.textContent = `Code-barres : ${product.sku}`;
+    const meta = document.createElement("div");
+    meta.className = "store-cart-meta";
+    const sku = document.createElement("span");
+    sku.className = "store-cart-sku";
+    sku.textContent = `Code-barres : ${product.sku}`;
+    const unit = document.createElement("span");
+    unit.className = "store-cart-unit";
+    unit.textContent = `${formatCurrency(product.price ?? 0)} / unité`;
+    meta.append(sku, unit);
 
     const footer = document.createElement("footer");
     const quantityControl = document.createElement("div");
@@ -651,12 +712,13 @@ function renderStoreCart() {
     }
     quantityControl.append(decreaseBtn, qtySpan, increaseBtn);
 
-    const lineTotal = document.createElement("strong");
+    const lineTotal = document.createElement("div");
+    lineTotal.className = "store-cart-line-total";
     lineTotal.textContent = formatCurrency((product.price ?? 0) * item.quantity);
 
     footer.append(quantityControl, lineTotal);
 
-    article.append(header, details, footer);
+    article.append(header, meta, footer);
     fragments.appendChild(article);
   });
 
@@ -1809,6 +1871,7 @@ function hydrateUI() {
   clearScan();
   resetProductImagePreview();
   initializeTpe();
+  updateStoreMetrics();
   setActivePage("home");
 }
 
