@@ -1298,11 +1298,29 @@ function createOrder({ items, customer, notes }) {
 function handleProductSubmit(event) {
   event.preventDefault();
   const formData = new FormData(event.target);
-  const sku = formData.get("sku").trim();
+  const rawSku = formData.get("sku").trim();
+  
+  // Nettoyer le SKU avant de l'utiliser
+  const sku = cleanScannedCode(rawSku);
+  
+  if (!sku || sku.length < 2) {
+    alert("Le code-barres doit contenir au moins 2 caractères alphanumériques valides.");
+    return;
+  }
+  
   if (state.products.some((product) => product.sku === sku)) {
     alert("Un produit avec ce code-barres existe déjà.");
     return;
   }
+  
+  // Mettre à jour le formulaire avec le SKU nettoyé
+  if (elements.productSkuInput) {
+    elements.productSkuInput.value = sku;
+  }
+  
+  // Mettre à jour le FormData avec le SKU nettoyé
+  formData.set("sku", sku);
+  
   const product = createProduct(formData);
   state.products.push(product);
   saveState();
@@ -1537,7 +1555,12 @@ function processScanValue(rawCode, mode = currentScanMode) {
   }
 
   if (!product) {
-    elements.scanResult.innerHTML = `<p class="empty-state">Aucun produit ou commande trouvé pour le code ${code}.</p>`;
+    // Utiliser textContent pour éviter les problèmes d'injection avec les caractères spéciaux
+    const emptyState = document.createElement('p');
+    emptyState.className = 'empty-state';
+    emptyState.textContent = `Aucun produit ou commande trouvé pour le code ${code}.`;
+    elements.scanResult.innerHTML = '';
+    elements.scanResult.appendChild(emptyState);
     return;
   }
 
@@ -1577,7 +1600,12 @@ function clearScan() {
   if (elements.scanResult) {
     elements.scanResult.dataset.context = currentScanMode;
   }
-  elements.scanResult.innerHTML = `<p class="empty-state">${message}</p>`;
+  // Utiliser textContent pour éviter les problèmes d'injection
+  const emptyState = document.createElement('p');
+  emptyState.className = 'empty-state';
+  emptyState.textContent = message;
+  elements.scanResult.innerHTML = '';
+  elements.scanResult.appendChild(emptyState);
 }
 
 function resetProductImagePreview() {
@@ -2016,6 +2044,18 @@ function exportOrders() {
 
 function attachEventListeners() {
   elements.productForm?.addEventListener("submit", handleProductSubmit);
+  // Nettoyer le champ SKU en temps réel pour éviter les caractères invalides
+  elements.productSkuInput?.addEventListener("input", (event) => {
+    const input = event.target;
+    const rawValue = input.value;
+    const cleanedValue = cleanScannedCode(rawValue);
+    if (rawValue !== cleanedValue) {
+      const cursorPosition = input.selectionStart;
+      input.value = cleanedValue;
+      const newPosition = Math.min(cursorPosition, cleanedValue.length);
+      input.setSelectionRange(newPosition, newPosition);
+    }
+  });
   elements.orderForm?.addEventListener("submit", handleOrderSubmit);
   elements.orderAddItem?.addEventListener("click", () => createOrderItemRow());
   elements.scanForm?.addEventListener("submit", handleScanSubmit);
