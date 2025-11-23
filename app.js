@@ -126,6 +126,7 @@ let currentScanMode = "pickup";
 let activeScanTarget = null;
 let lastScanCode = "";
 let lastScanMode = "inventory";
+let storeBarcodeScanTimeout = null;
 let activeDrawerProductId = null;
 let activeDrawerOrderId = null;
 let tpeBuffer = "0";
@@ -885,10 +886,16 @@ function cleanScannedCode(rawCode) {
     .replace(/[^a-zA-Z0-9\-_]/g, '') // Ne garder que alphanumériques ASCII + tirets/underscores
     .trim();
   
+  // Vérifier que le code contient au moins un caractère alphanumérique
+  // Si le code ne contient que des séparateurs (tirets/underscores), c'est invalide
+  if (!/[a-zA-Z0-9]/.test(cleaned)) {
+    return ""; // Code invalide (que des séparateurs)
+  }
+  
   return cleaned;
 }
 
-// Fonction pour nettoyer le champ en temps réel
+// Fonction pour nettoyer le champ en temps réel et détecter les scans USB
 function handleStoreBarcodeInput(event) {
   const input = event.target;
   const rawValue = input.value;
@@ -902,15 +909,43 @@ function handleStoreBarcodeInput(event) {
     const newPosition = Math.min(cursorPosition, cleanedValue.length);
     input.setSelectionRange(newPosition, newPosition);
   }
+  
+  // Détection automatique des scans USB
+  // Les scanners USB envoient les caractères très rapidement
+  // On attend 100ms après la dernière saisie pour traiter automatiquement
+  if (storeBarcodeScanTimeout) {
+    clearTimeout(storeBarcodeScanTimeout);
+  }
+  
+  storeBarcodeScanTimeout = setTimeout(() => {
+    const code = input.value.trim();
+    if (code && code.length >= 3) { // Minimum 3 caractères pour un code valide
+      const cleanedCode = cleanScannedCode(code);
+      if (cleanedCode && cleanedCode.length >= 3 && /[a-zA-Z0-9]/.test(cleanedCode)) {
+        // Code valide détecté, traiter automatiquement
+        const success = addStoreProductBySku(cleanedCode);
+        if (success && input) {
+          input.value = "";
+        }
+      }
+    }
+    storeBarcodeScanTimeout = null;
+  }, 150); // 150ms de pause = scan terminé
 }
 
 function addStoreProductBySku(code) {
   // Nettoyer le code avant de chercher
   const cleanedCode = cleanScannedCode(code);
   
-  // Si le code nettoyé est vide ou trop court, c'est un scan invalide
+  // Si le code nettoyé est vide, trop court, ou ne contient que des séparateurs, c'est un scan invalide
   if (!cleanedCode || cleanedCode.length < 2) {
-    // Ne pas afficher d'erreur pour un scan invalide, juste ignorer
+    // Ne pas afficher d'erreur pour un scan invalide, juste ignorer silencieusement
+    return false;
+  }
+  
+  // Vérifier que le code contient au moins un caractère alphanumérique
+  if (!/[a-zA-Z0-9]/.test(cleanedCode)) {
+    // Code ne contenant que des séparateurs, ignorer silencieusement
     return false;
   }
   
