@@ -30,6 +30,8 @@ const elements = {
   orderForm: document.querySelector("#orderForm"),
   orderItemsContainer: document.querySelector("#orderItemsContainer"),
   orderAddItem: document.querySelector("#orderAddItem"),
+  orderBarcodeInput: document.querySelector("#orderBarcodeInput"),
+  orderScanBtn: document.querySelector("#orderScanBtn"),
   orderCustomer: document.querySelector("#orderCustomer"),
   orderNotes: document.querySelector("#orderNotes"),
   orderTableBody: document.querySelector("#ordersTable tbody"),
@@ -310,6 +312,9 @@ function createOrderItemRow(productId = "", quantity = 1) {
   if (!container) return;
   const row = document.createElement("div");
   row.className = "order-item-row";
+  if (productId) {
+    row.dataset.productId = productId;
+  }
 
   const select = document.createElement("select");
   select.className = "order-item-select";
@@ -1532,6 +1537,78 @@ function handleOrderSubmit(event) {
   }
 }
 
+// Gérer l'input du scan de code-barres dans les commandes
+function handleOrderBarcodeInput(event) {
+  const input = event.target;
+  const rawValue = input.value;
+  
+  // Attendre la fin du scan avant de traiter
+  if (orderBarcodeTimeout) {
+    clearTimeout(orderBarcodeTimeout);
+  }
+  
+  orderBarcodeTimeout = setTimeout(() => {
+    const cleanedValue = cleanScannedCode(rawValue);
+    if (cleanedValue && cleanedValue.length >= 2) {
+      // Chercher le produit par code-barres
+      const product = state.products.find((p) => p.sku === cleanedValue);
+      if (product) {
+        // Ajouter le produit à la commande
+        addProductToOrder(product.id);
+        // Vider le champ
+        input.value = "";
+      } else {
+        console.warn("Produit non trouvé avec le code-barres:", cleanedValue);
+        // Optionnel : afficher un message à l'utilisateur
+        alert(`Produit non trouvé avec le code-barres: ${cleanedValue}`);
+      }
+    }
+    orderBarcodeTimeout = null;
+  }, 400); // 400ms de délai pour laisser le temps au code complet d'arriver
+}
+
+// Gérer la soumission du scan (touche Enter)
+function handleOrderBarcodeSubmit(event) {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    const rawValue = elements.orderBarcodeInput?.value.trim();
+    if (!rawValue) return;
+    
+    const cleanedValue = cleanScannedCode(rawValue);
+    if (cleanedValue && cleanedValue.length >= 2) {
+      const product = state.products.find((p) => p.sku === cleanedValue);
+      if (product) {
+        addProductToOrder(product.id);
+        if (elements.orderBarcodeInput) {
+          elements.orderBarcodeInput.value = "";
+        }
+      } else {
+        alert(`Produit non trouvé avec le code-barres: ${cleanedValue}`);
+      }
+    }
+  }
+}
+
+// Ajouter un produit à la commande
+function addProductToOrder(productId) {
+  // Vérifier si le produit existe déjà dans la commande
+  const existingRow = elements.orderItemsContainer?.querySelector(
+    `.order-item-row[data-product-id="${productId}"]`
+  );
+  
+  if (existingRow) {
+    // Si le produit existe déjà, augmenter la quantité
+    const qtyInput = existingRow.querySelector(".order-item-qty");
+    if (qtyInput) {
+      const currentQty = Number.parseInt(qtyInput.value || "1", 10);
+      qtyInput.value = currentQty + 1;
+    }
+  } else {
+    // Sinon, créer une nouvelle ligne
+    createOrderItemRow(productId, 1);
+  }
+}
+
 function updateOrderStatus(orderId, status) {
   const order = state.orders.find((item) => item.id === orderId);
   if (!order) return;
@@ -2238,6 +2315,14 @@ function attachEventListeners() {
   });
   elements.orderForm?.addEventListener("submit", handleOrderSubmit);
   elements.orderAddItem?.addEventListener("click", () => createOrderItemRow());
+  elements.orderBarcodeInput?.addEventListener("input", handleOrderBarcodeInput);
+  elements.orderBarcodeInput?.addEventListener("keydown", handleOrderBarcodeSubmit);
+  elements.orderScanBtn?.addEventListener("click", () => {
+    if (elements.orderBarcodeInput) {
+      elements.orderBarcodeInput.focus();
+      elements.orderBarcodeInput.select();
+    }
+  });
   elements.scanForm?.addEventListener("submit", handleScanSubmit);
   // Nettoyer le champ scanInput (page retrait colis) - nettoyage immédiat pour éviter les caractères AZERTY visibles
   let scanInputTimeout = null;

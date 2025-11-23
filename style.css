@@ -2297,6 +2297,66 @@ textarea:focus {
   border: 0;
 }
 
+/* Styles pour le scan dans les commandes */
+.order-scan-section {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 16px;
+  background: var(--accent-soft);
+  border-radius: var(--radius-xs);
+  border: 1px solid rgba(101, 89, 245, 0.2);
+}
+
+.order-scan-section label {
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.order-scan-section label span {
+  font-size: 20px;
+  color: var(--accent);
+}
+
+.order-barcode-input {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.order-barcode-input input {
+  flex: 1;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  padding: 12px 14px;
+  font-size: 15px;
+  background: var(--bg-panel);
+  box-shadow: 0 10px 24px rgba(36, 33, 69, 0.05);
+}
+
+.order-barcode-input input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 10px 24px rgba(101, 89, 245, 0.15);
+}
+
+:root.dark .order-barcode-input input {
+  background: var(--bg-panel-alt);
+  border-color: rgba(123, 132, 171, 0.28);
+}
+
+.order-barcode-input button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 /* Styles pour les cartes de fidélité */
 .loyalty-section {
   margin-bottom: 1rem;
