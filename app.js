@@ -2573,26 +2573,32 @@ async function startWithZxing(videoElement) {
 // SYSTÈME DE CARTES DE FIDÉLITÉ
 // ============================================
 
-// Générer un QR code pour un client
-async function generateLoyaltyQRCode(customerId) {
-  if (!window.QRCode) {
-    console.error("Bibliothèque QRCode non chargée");
+// Générer un code-barres pour un client
+function generateLoyaltyBarcode(customerId) {
+  if (!window.JsBarcode) {
+    console.error("Bibliothèque JsBarcode non chargée");
     return null;
   }
   
   try {
-    const qrData = `LOYALTY:${customerId}`;
-    const qrCodeDataUrl = await QRCode.toDataURL(qrData, {
-      width: 200,
-      margin: 2,
-      color: {
-        dark: '#000000',
-        light: '#FFFFFF'
-      }
+    // Créer un canvas temporaire pour générer le code-barres
+    const canvas = document.createElement("canvas");
+    // Utiliser CODE128 qui supporte les caractères alphanumériques
+    JsBarcode(canvas, customerId, {
+      format: "CODE128",
+      width: 2,
+      height: 80,
+      displayValue: true,
+      fontSize: 14,
+      margin: 10,
+      background: "#ffffff",
+      lineColor: "#000000"
     });
-    return qrCodeDataUrl;
+    
+    // Retourner l'URL de données du canvas
+    return canvas.toDataURL("image/png");
   } catch (error) {
-    console.error("Erreur génération QR code:", error);
+    console.error("Erreur génération code-barres:", error);
     return null;
   }
 }
@@ -2609,7 +2615,7 @@ function createLoyaltyCustomer(formData) {
     totalSpent: 0,
     createdAt: Date.now(),
     lastPurchase: null,
-    qrCode: null, // Sera généré à la demande
+    barcode: null, // Sera généré à la demande
   };
 }
 
@@ -2775,11 +2781,11 @@ function renderLoyaltyCustomers() {
       const actionsCell = document.createElement("td");
       actionsCell.className = "table-actions";
       
-      const qrBtn = document.createElement("button");
-      qrBtn.className = "icon-button";
-      qrBtn.title = "Voir QR code";
-      qrBtn.innerHTML = '<span class="material-symbols-rounded">qr_code</span>';
-      qrBtn.addEventListener("click", () => showLoyaltyQRCode(customer));
+      const barcodeBtn = document.createElement("button");
+      barcodeBtn.className = "icon-button";
+      barcodeBtn.title = "Voir code-barres";
+      barcodeBtn.innerHTML = '<span class="material-symbols-rounded">qr_code</span>';
+      barcodeBtn.addEventListener("click", () => showLoyaltyBarcode(customer));
       
       const editBtn = document.createElement("button");
       editBtn.className = "icon-button";
@@ -2797,18 +2803,18 @@ function renderLoyaltyCustomers() {
         }
       });
       
-      actionsCell.append(qrBtn, editBtn, deleteBtn);
+      actionsCell.append(barcodeBtn, editBtn, deleteBtn);
       
       row.append(nameCell, pointsCell, spentCell, contactCell, actionsCell);
       elements.loyaltyCustomersTable.appendChild(row);
     });
 }
 
-// Afficher le QR code d'un client
-async function showLoyaltyQRCode(customer) {
-  // Générer le QR code s'il n'existe pas encore
-  if (!customer.qrCode) {
-    customer.qrCode = await generateLoyaltyQRCode(customer.id);
+// Afficher le code-barres d'un client
+function showLoyaltyBarcode(customer) {
+  // Générer le code-barres s'il n'existe pas encore
+  if (!customer.barcode) {
+    customer.barcode = generateLoyaltyBarcode(customer.id);
     saveState();
   }
   
@@ -2818,7 +2824,7 @@ async function showLoyaltyQRCode(customer) {
   elements.drawerContent.innerHTML = `
     <div style="text-align: center; padding: 2rem;">
       <div style="margin-bottom: 1.5rem;">
-        <img src="${customer.qrCode}" alt="QR Code" style="max-width: 300px; border: 2px solid var(--border); padding: 1rem; background: white; border-radius: var(--radius-xs);" />
+        <img src="${customer.barcode}" alt="Code-barres" style="max-width: 100%; border: 2px solid var(--border); padding: 1rem; background: white; border-radius: var(--radius-xs);" />
       </div>
       <div style="margin-bottom: 1rem;">
         <p style="font-size: 1.1rem; font-weight: 600; margin-bottom: 0.5rem;"><strong>${customer.firstName} ${customer.lastName}</strong></p>
@@ -2868,7 +2874,7 @@ function deleteLoyaltyCustomer(customerId) {
 }
 
 // Gérer la soumission du formulaire de client
-async function handleLoyaltyCustomerSubmit(event) {
+function handleLoyaltyCustomerSubmit(event) {
   event.preventDefault();
   const formData = new FormData(event.target);
   
@@ -2887,14 +2893,14 @@ async function handleLoyaltyCustomerSubmit(event) {
       if (newPoints !== customer.points) {
         customer.points = newPoints;
       }
-      customer.qrCode = null; // Régénérer le QR code
+      customer.barcode = null; // Régénérer le code-barres
       newCustomer = customer;
     }
   } else {
-    // Création - générer le QR code immédiatement
+    // Création - générer le code-barres immédiatement
     const customer = createLoyaltyCustomer(formData);
-    // Générer le QR code dès la création
-    customer.qrCode = await generateLoyaltyQRCode(customer.id);
+    // Générer le code-barres dès la création
+    customer.barcode = generateLoyaltyBarcode(customer.id);
     state.loyaltyCustomers.push(customer);
     newCustomer = customer;
   }
@@ -2911,11 +2917,11 @@ async function handleLoyaltyCustomerSubmit(event) {
     elements.loyaltyAddCustomerBtn.style.display = "inline-block";
   }
   
-  // Si c'est une nouvelle création, afficher immédiatement le QR code
+  // Si c'est une nouvelle création, afficher immédiatement le code-barres
   if (newCustomer && !editingId) {
     // Attendre un peu pour que le formulaire se ferme
     setTimeout(() => {
-      showLoyaltyQRCode(newCustomer);
+      showLoyaltyBarcode(newCustomer);
     }, 300);
   }
 }

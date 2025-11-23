@@ -475,23 +475,23 @@
           <form id="loyaltyCustomerForm" class="form-grid" style="display: none;">
             <div class="field">
               <label for="loyaltyFirstName">Prénom *</label>
-              <input type="text" id="loyaltyFirstName" placeholder="Prénom du client" required />
+              <input type="text" id="loyaltyFirstName" name="firstName" placeholder="Prénom du client" required />
             </div>
             <div class="field">
               <label for="loyaltyLastName">Nom *</label>
-              <input type="text" id="loyaltyLastName" placeholder="Nom du client" required />
+              <input type="text" id="loyaltyLastName" name="lastName" placeholder="Nom du client" required />
             </div>
             <div class="field">
               <label for="loyaltyEmail">Email</label>
-              <input type="email" id="loyaltyEmail" placeholder="email@exemple.com" />
+              <input type="email" id="loyaltyEmail" name="email" placeholder="email@exemple.com" />
             </div>
             <div class="field">
               <label for="loyaltyPhone">Téléphone</label>
-              <input type="tel" id="loyaltyPhone" placeholder="06 12 34 56 78" />
+              <input type="tel" id="loyaltyPhone" name="phone" placeholder="06 12 34 56 78" />
             </div>
             <div class="field">
               <label for="loyaltyInitialPoints">Points initiaux</label>
-              <input type="number" id="loyaltyInitialPoints" min="0" value="0" placeholder="0" />
+              <input type="number" id="loyaltyInitialPoints" name="initialPoints" min="0" value="0" placeholder="0" />
               <small class="field-hint">Points de départ pour ce client (optionnel)</small>
             </div>
             <div class="form-actions">
@@ -677,7 +677,7 @@
       rel="stylesheet"
       href="https://fonts.googleapis.com/icon?family=Material+Symbols+Rounded"
     />
-    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
     <script src="app.js" type="module"></script>
   </body>
 </html>
