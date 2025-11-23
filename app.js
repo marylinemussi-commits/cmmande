@@ -899,6 +899,7 @@ const AZERTY_LETTER_MAP = {
 
 // Détecter les patterns AZERTY courants et les convertir
 // Exemple: çè_é"é'àé(&éç pourrait être 9876543210
+// Exemple: çè_é_é'-éè(è& pourrait être 97822467571
 function detectAndConvertAzertyPattern(text) {
   if (!text) return text;
   
@@ -906,19 +907,33 @@ function detectAndConvertAzertyPattern(text) {
   const azertyNumberChars = ['ç', 'è', 'é', 'à', '&', '"', "'", '(', '-', '_'];
   const azertyCount = Array.from(text).filter(c => azertyNumberChars.includes(c)).length;
   
-  // Si plus de 30% des caractères sont des caractères AZERTY de chiffres, 
-  // c'est probablement un code numérique mal interprété
-  if (azertyCount > text.length * 0.3) {
+  // Si plus de 20% des caractères sont des caractères AZERTY de chiffres, 
+  // c'est probablement un code numérique mal interprété (seuil réduit pour mieux détecter)
+  if (azertyCount > text.length * 0.2 || azertyCount >= 3) {
     // Convertir caractère par caractère selon le mapping AZERTY
     let converted = "";
     for (let i = 0; i < text.length; i++) {
       const char = text[i];
       
       // Mapping spécifique pour les caractères ambigus (priorité aux chiffres)
-      if (char === 'é') {
+      // Rangée AZERTY: & é " ' ( - è _ ç à
+      // Correspond à:   1 2 3 4 5 6 7 8 9 0
+      if (char === '&') {
+        converted += '1';
+      } else if (char === 'é') {
         converted += '2'; // Touche 2 en AZERTY
+      } else if (char === '"') {
+        converted += '3';
+      } else if (char === "'") {
+        converted += '4';
+      } else if (char === '(') {
+        converted += '5';
+      } else if (char === '-') {
+        converted += '6';
       } else if (char === 'è') {
         converted += '7'; // Touche 7 en AZERTY
+      } else if (char === '_') {
+        converted += '8';
       } else if (char === 'ç') {
         converted += '9'; // Touche 9 en AZERTY
       } else if (char === 'à') {
@@ -976,45 +991,40 @@ function cleanScannedCode(rawCode) {
   return cleaned;
 }
 
-// Fonction pour nettoyer le champ en temps réel et détecter les scans USB
+// Fonction pour nettoyer le champ et détecter les scans USB
+// IMPORTANT: Ne pas nettoyer en temps réel pour éviter de couper le code pendant le scan
 function handleStoreBarcodeInput(event) {
   const input = event.target;
   const rawValue = input.value;
   
   // Mode diagnostic : afficher le code brut dans la console pour déboguer
   if (rawValue && rawValue.length > 0) {
-    console.log('Code brut reçu du scanner:', rawValue, '| Caractères:', Array.from(rawValue).map(c => c.charCodeAt(0)));
+    console.log('Code brut reçu du scanner:', rawValue, '| Longueur:', rawValue.length);
   }
   
-  const cleanedValue = cleanScannedCode(rawValue);
-  
-  // Si la valeur a changé après nettoyage, mettre à jour le champ
-  if (rawValue !== cleanedValue) {
-    const cursorPosition = input.selectionStart;
-    input.value = cleanedValue;
-    // Restaurer la position du curseur si possible
-    const newPosition = Math.min(cursorPosition, cleanedValue.length);
-    input.setSelectionRange(newPosition, newPosition);
-    
-    // Avertir si le code nettoyé est vide ou invalide
-    if (!cleanedValue || !/[a-zA-Z0-9]/.test(cleanedValue)) {
-      console.warn('Code invalide détecté. Code brut:', rawValue, '| Code nettoyé:', cleanedValue);
-      console.warn('💡 Conseil: Vérifiez la configuration de votre scanner USB. Il devrait envoyer des caractères ASCII standards.');
-    }
-  }
+  // NE PAS nettoyer en temps réel pendant le scan pour éviter de couper le code
+  // On attend que le scan soit terminé avant de nettoyer
   
   // Détection automatique des scans USB
   // Les scanners USB envoient les caractères très rapidement
-  // On attend 150ms après la dernière saisie pour traiter automatiquement
+  // On attend 400ms après la dernière saisie pour être sûr que tout le code est arrivé
   if (storeBarcodeScanTimeout) {
     clearTimeout(storeBarcodeScanTimeout);
   }
   
   storeBarcodeScanTimeout = setTimeout(() => {
-    const code = input.value.trim();
-    if (code && code.length >= 3) { // Minimum 3 caractères pour un code valide
-      const cleanedCode = cleanScannedCode(code);
-      if (cleanedCode && cleanedCode.length >= 3 && /[a-zA-Z0-9]/.test(cleanedCode)) {
+    const rawCode = input.value;
+    console.log('Scan terminé, code complet reçu:', rawCode, '| Longueur:', rawCode.length);
+    
+    if (rawCode && rawCode.trim().length >= 2) {
+      // Maintenant on nettoie le code complet (pas pendant le scan)
+      const cleanedCode = cleanScannedCode(rawCode);
+      console.log('Code nettoyé:', cleanedCode, '| Longueur:', cleanedCode.length);
+      
+      if (cleanedCode && cleanedCode.length >= 2 && /[a-zA-Z0-9]/.test(cleanedCode)) {
+        // Mettre à jour le champ avec le code nettoyé
+        input.value = cleanedCode;
+        
         // Code valide détecté, traiter automatiquement
         console.log('Traitement automatique du code:', cleanedCode);
         const success = addStoreProductBySku(cleanedCode);
@@ -1023,11 +1033,12 @@ function handleStoreBarcodeInput(event) {
         }
       } else {
         // Code invalide après nettoyage
-        console.warn('Code scanné invalide (trop court ou que des séparateurs):', code, '->', cleanedCode);
+        console.warn('Code scanné invalide (trop court ou que des séparateurs):', rawCode, '->', cleanedCode);
+        // Ne pas vider le champ pour que l'utilisateur puisse voir ce qui a été scanné
       }
     }
     storeBarcodeScanTimeout = null;
-  }, 150); // 150ms de pause = scan terminé
+  }, 400); // 400ms de pause = scan terminé (augmenté pour laisser le temps au code complet d'arriver)
 }
 
 function addStoreProductBySku(code) {
@@ -2125,17 +2136,27 @@ function exportOrders() {
 
 function attachEventListeners() {
   elements.productForm?.addEventListener("submit", handleProductSubmit);
-  // Nettoyer le champ SKU en temps réel pour éviter les caractères invalides
+  // Nettoyer le champ SKU avec délai pour éviter de couper le code pendant le scan
+  let productSkuTimeout = null;
   elements.productSkuInput?.addEventListener("input", (event) => {
     const input = event.target;
     const rawValue = input.value;
-    const cleanedValue = cleanScannedCode(rawValue);
-    if (rawValue !== cleanedValue) {
-      const cursorPosition = input.selectionStart;
-      input.value = cleanedValue;
-      const newPosition = Math.min(cursorPosition, cleanedValue.length);
-      input.setSelectionRange(newPosition, newPosition);
+    
+    // Attendre que le scan soit terminé avant de nettoyer
+    if (productSkuTimeout) {
+      clearTimeout(productSkuTimeout);
     }
+    
+    productSkuTimeout = setTimeout(() => {
+      const cleanedValue = cleanScannedCode(rawValue);
+      if (rawValue !== cleanedValue) {
+        const cursorPosition = input.selectionStart;
+        input.value = cleanedValue;
+        const newPosition = Math.min(cursorPosition, cleanedValue.length);
+        input.setSelectionRange(newPosition, newPosition);
+      }
+      productSkuTimeout = null;
+    }, 300); // 300ms de délai pour laisser le temps au code complet d'arriver
   });
   elements.orderForm?.addEventListener("submit", handleOrderSubmit);
   elements.orderAddItem?.addEventListener("click", () => createOrderItemRow());
