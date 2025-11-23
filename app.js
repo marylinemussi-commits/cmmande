@@ -972,7 +972,8 @@ function convertAzertyToAscii(text) {
 }
 
 // Fonction pour nettoyer et normaliser les codes scannés
-function cleanScannedCode(rawCode) {
+// Si numbersOnly est true, ne garde que les chiffres (pour retrait colis)
+function cleanScannedCode(rawCode, numbersOnly = false) {
   if (!rawCode) return "";
   
   // Étape 1: Détecter et convertir les patterns AZERTY
@@ -981,15 +982,29 @@ function cleanScannedCode(rawCode) {
   // Étape 2: Convertir les caractères AZERTY restants vers ASCII
   converted = convertAzertyToAscii(converted);
   
-  // Étape 3: Ne garder QUE les caractères ASCII alphanumériques (a-z, A-Z, 0-9) et tirets/underscores
-  let cleaned = converted
-    .replace(/[^a-zA-Z0-9\-_]/g, '') // Ne garder que alphanumériques ASCII + tirets/underscores
-    .trim();
+  // Étape 3: Nettoyer selon le mode
+  let cleaned;
+  if (numbersOnly) {
+    // Mode chiffres uniquement (pour retrait colis)
+    cleaned = converted
+      .replace(/[^0-9]/g, '') // Ne garder QUE les chiffres
+      .trim();
+  } else {
+    // Mode normal : alphanumériques + tirets/underscores (pour inventaire et caisse)
+    cleaned = converted
+      .replace(/[^a-zA-Z0-9\-_]/g, '') // Ne garder que alphanumériques ASCII + tirets/underscores
+      .trim();
+  }
   
-  // Vérifier que le code contient au moins un caractère alphanumérique
-  // Si le code ne contient que des séparateurs (tirets/underscores), c'est invalide
-  if (!/[a-zA-Z0-9]/.test(cleaned)) {
-    return ""; // Code invalide (que des séparateurs)
+  // Vérifier que le code contient au moins un caractère valide
+  if (numbersOnly) {
+    if (!/[0-9]/.test(cleaned)) {
+      return ""; // Code invalide (pas de chiffres)
+    }
+  } else {
+    if (!/[a-zA-Z0-9]/.test(cleaned)) {
+      return ""; // Code invalide (que des séparateurs)
+    }
   }
   
   return cleaned;
@@ -1653,7 +1668,9 @@ function showScanCard(product, order = null, mode = "inventory") {
 
 function processScanValue(rawCode, mode = currentScanMode) {
   // Nettoyer le code avant de le traiter
-  const cleanedCode = cleanScannedCode(rawCode.trim());
+  // Pour retrait colis (pickup), ne garder que les chiffres
+  const numbersOnly = mode === "pickup";
+  const cleanedCode = cleanScannedCode(rawCode.trim(), numbersOnly);
   if (!cleanedCode || cleanedCode.length < 2) {
     console.warn('Code scanné invalide dans processScanValue:', rawCode, '->', cleanedCode);
     return;
@@ -1706,8 +1723,8 @@ function handleScanSubmit(event) {
   const rawCode = elements.scanInput.value.trim();
   if (!rawCode) return;
   
-  // Nettoyer le code avant de le traiter
-  const cleanedCode = cleanScannedCode(rawCode);
+  // Nettoyer le code avant de le traiter (chiffres uniquement pour retrait colis)
+  const cleanedCode = cleanScannedCode(rawCode, true); // true = chiffres uniquement
   if (!cleanedCode || cleanedCode.length < 2) {
     console.warn('Code scanné invalide dans retrait colis:', rawCode, '->', cleanedCode);
     return;
@@ -2216,13 +2233,14 @@ function attachEventListeners() {
     }
     
     scanInputTimeout = setTimeout(() => {
-      const cleanedValue = cleanScannedCode(rawValue);
+      // Nettoyer en mode chiffres uniquement pour retrait colis
+      const cleanedValue = cleanScannedCode(rawValue, true); // true = chiffres uniquement
       if (rawValue !== cleanedValue) {
         const cursorPosition = input.selectionStart;
         input.value = cleanedValue;
         const newPosition = Math.min(cursorPosition, cleanedValue.length);
         input.setSelectionRange(newPosition, newPosition);
-        console.log('Scan retrait colis - Code nettoyé:', cleanedValue);
+        console.log('Scan retrait colis - Code nettoyé (chiffres uniquement):', cleanedValue);
       }
       scanInputTimeout = null;
     }, 400); // 400ms de délai pour laisser le temps au code complet d'arriver
@@ -2376,10 +2394,12 @@ async function startWithBarcodeDetector(videoElement) {
     try {
       const barcodes = await cameraState.detector.detect(videoElement);
         if (barcodes.length) {
-          const rawValue = barcodes[0].rawValue?.trim();
+            const rawValue = barcodes[0].rawValue?.trim();
           if (rawValue) {
             // Nettoyer le code scanné par la caméra
-            const cleanedValue = cleanScannedCode(rawValue);
+            // Si c'est pour retrait colis, ne garder que les chiffres
+            const isPickup = activeScanTarget === elements.scanInput;
+            const cleanedValue = cleanScannedCode(rawValue, isPickup);
             if (!cleanedValue || cleanedValue.length < 2) {
               console.warn('Code scanné invalide (caméra BarcodeDetector):', rawValue, '->', cleanedValue);
               return;
@@ -2472,7 +2492,9 @@ async function startWithZxing(videoElement) {
         if (text) {
           const rawValue = text.trim();
           // Nettoyer le code scanné par la caméra (ZXing)
-          const cleanedValue = cleanScannedCode(rawValue);
+          // Si c'est pour retrait colis, ne garder que les chiffres
+          const isPickup = activeScanTarget === elements.scanInput;
+          const cleanedValue = cleanScannedCode(rawValue, isPickup);
           if (!cleanedValue || cleanedValue.length < 2) {
             console.warn('Code scanné invalide (caméra ZXing):', rawValue, '->', cleanedValue);
             return;
