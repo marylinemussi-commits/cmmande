@@ -879,17 +879,11 @@ function handleStoreReset() {
 function cleanScannedCode(rawCode) {
   if (!rawCode) return "";
   
-  // Supprimer les caractères de contrôle et les caractères spéciaux indésirables
+  // Ne garder QUE les caractères ASCII alphanumériques (a-z, A-Z, 0-9) et tirets/underscores
+  // Cela supprime automatiquement tous les caractères accentués et spéciaux
   let cleaned = rawCode
-    .replace(/[\x00-\x1F\x7F]/g, '') // Supprimer les caractères de contrôle
-    .replace(/['":;ù!@#$%^&*()+=\[\]{}|\\<>?\/]/g, '') // Supprimer les caractères spéciaux problématiques
-    .replace(/\s+/g, '') // Supprimer tous les espaces
+    .replace(/[^a-zA-Z0-9\-_]/g, '') // Ne garder que alphanumériques ASCII + tirets/underscores
     .trim();
-  
-  // Si le code contient encore des caractères non valides, ne garder que alphanumériques et tirets
-  if (!/^[\w\d\-_]+$/.test(cleaned)) {
-    cleaned = cleaned.replace(/[^\w\d\-_]/g, '');
-  }
   
   return cleaned;
 }
@@ -913,7 +907,10 @@ function handleStoreBarcodeInput(event) {
 function addStoreProductBySku(code) {
   // Nettoyer le code avant de chercher
   const cleanedCode = cleanScannedCode(code);
-  if (!cleanedCode) {
+  
+  // Si le code nettoyé est vide ou trop court, c'est un scan invalide
+  if (!cleanedCode || cleanedCode.length < 2) {
+    // Ne pas afficher d'erreur pour un scan invalide, juste ignorer
     return false;
   }
   
@@ -924,6 +921,7 @@ function addStoreProductBySku(code) {
   });
   
   if (!product) {
+    // Afficher une alerte seulement si le code nettoyé semble valide
     alert(`Aucun produit avec le code ${cleanedCode}.`);
     return false;
   }
