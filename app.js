@@ -1540,7 +1540,37 @@ function handleOrderSubmit(event) {
 // Gérer l'input du scan de code-barres dans les commandes
 function handleOrderBarcodeInput(event) {
   const input = event.target;
-  const rawValue = input.value;
+  let rawValue = input.value;
+  
+  // NETTOYAGE IMMÉDIAT pour éviter d'afficher les caractères AZERTY
+  // Convertir immédiatement les caractères AZERTY en chiffres caractère par caractère
+  let immediateClean = "";
+  for (let i = 0; i < rawValue.length; i++) {
+    const char = rawValue[i];
+    // Conversion AZERTY → chiffres (immédiate et complète)
+    if (char === '&') immediateClean += '1';
+    else if (char === 'é' || char === 'É') immediateClean += '2';
+    else if (char === '"') immediateClean += '3';
+    else if (char === "'") immediateClean += '4';
+    else if (char === '(') immediateClean += '5';
+    else if (char === '-') immediateClean += '6';
+    else if (char === 'è' || char === 'È') immediateClean += '7';
+    else if (char === '_') immediateClean += '8';
+    else if (char === 'ç' || char === 'Ç') immediateClean += '9';
+    else if (char === 'à' || char === 'À') immediateClean += '0';
+    else if (/[0-9]/.test(char)) immediateClean += char; // Garder les chiffres
+    // Ignorer tous les autres caractères
+  }
+  
+  // Appliquer immédiatement si différent
+  if (rawValue !== immediateClean) {
+    const cursorPosition = input.selectionStart;
+    input.value = immediateClean;
+    const newPosition = Math.min(cursorPosition, immediateClean.length);
+    input.setSelectionRange(newPosition, newPosition);
+    console.log('Scan commandes - Nettoyage immédiat:', rawValue, '->', immediateClean);
+    rawValue = immediateClean; // Utiliser la valeur nettoyée pour la suite
+  }
   
   // Attendre la fin du scan avant de traiter
   if (orderBarcodeTimeout) {
@@ -1548,7 +1578,9 @@ function handleOrderBarcodeInput(event) {
   }
   
   orderBarcodeTimeout = setTimeout(() => {
-    const cleanedValue = cleanScannedCode(rawValue);
+    const finalValue = input.value;
+    // Nettoyer en mode chiffres uniquement pour les commandes
+    const cleanedValue = cleanScannedCode(finalValue, true); // true = chiffres uniquement
     if (cleanedValue && cleanedValue.length >= 2) {
       // Chercher le produit par code-barres
       const product = state.products.find((p) => p.sku === cleanedValue);
@@ -1574,7 +1606,8 @@ function handleOrderBarcodeSubmit(event) {
     const rawValue = elements.orderBarcodeInput?.value.trim();
     if (!rawValue) return;
     
-    const cleanedValue = cleanScannedCode(rawValue);
+    // Nettoyer en mode chiffres uniquement pour les commandes
+    const cleanedValue = cleanScannedCode(rawValue, true); // true = chiffres uniquement
     if (cleanedValue && cleanedValue.length >= 2) {
       const product = state.products.find((p) => p.sku === cleanedValue);
       if (product) {

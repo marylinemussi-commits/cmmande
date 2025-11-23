@@ -259,12 +259,12 @@
                   Scanner un produit
                 </label>
                 <div class="order-barcode-input">
-                  <input type="text" id="orderBarcodeInput" placeholder="Scannez le code-barres avec votre scanner USB" autofocus />
+                  <input type="text" id="orderBarcodeInput" placeholder="Scannez le code-barres avec votre scanner USB (chiffres uniquement)" autofocus inputmode="numeric" />
                   <button type="button" class="secondary icon-text compact-button" id="orderScanBtn" title="Activer le champ">
                     <span class="material-symbols-rounded">qr_code_scanner</span>
                   </button>
                 </div>
-                <small class="field-hint">Connectez votre scanner USB et scannez directement. Le produit sera ajouté automatiquement à la commande.</small>
+                <small class="field-hint">Connectez votre scanner USB et scannez directement. Seuls les chiffres seront conservés. Le produit sera ajouté automatiquement à la commande.</small>
               </div>
               <div id="orderItemsContainer" class="order-items-container"></div>
             </div>
