@@ -2152,3 +2152,59 @@ textarea:focus {
   border: 0;
 }
 
+/* Styles pour les cartes de fidélité */
+.loyalty-section {
+  margin-bottom: 1rem;
+}
+
+.loyalty-customer-select {
+  display: flex;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+
+.loyalty-customer-select input {
+  flex: 1;
+}
+
+.loyalty-customer-info {
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  background: var(--accent-soft);
+  border-radius: var(--radius-xs);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.customer-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  flex: 1;
+}
+
+.customer-details strong {
+  font-size: 1rem;
+  color: var(--text);
+}
+
+.customer-points {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+
+.customer-points strong {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+#loyaltyCustomerForm {
+  display: none;
+}
+
+#loyaltyCustomerForm.show {
+  display: grid;
+}
+

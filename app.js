@@ -16,6 +16,7 @@ const state = {
   orders: [],
   tpeHistory: [],
   storeCart: [],
+  loyaltyCustomers: [], // Clients avec cartes de fidélité
 };
 
 const elements = {
@@ -151,6 +152,7 @@ function loadState() {
     state.orders = parsed.orders ?? [];
     state.tpeHistory = parsed.tpeHistory ?? [];
     state.storeCart = parsed.storeCart ?? [];
+    state.loyaltyCustomers = parsed.loyaltyCustomers ?? [];
   } catch (error) {
     console.error("Impossible de charger l'état sauvegardé :", error);
   }
@@ -193,6 +195,8 @@ function setActivePage(pageId) {
     setTimeout(() => {
       (elements.storeBarcodeInput || elements.storeSearch)?.focus();
     }, 150);
+  } else if (pageId === "loyalty") {
+    initLoyaltyPage();
   }
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
@@ -1129,11 +1133,28 @@ function handleStoreCheckout(event) {
     product.stock = Math.max(0, currentStock - item.quantity);
   });
 
+  // Ajouter des points de fidélité si un client est sélectionné
+  const customerId = elements.storeCustomerId?.value;
+  if (customerId && total > 0) {
+    const customer = state.loyaltyCustomers.find((c) => c.id === customerId);
+    if (customer) {
+      // 1 point par euro dépensé (arrondi)
+      const pointsEarned = Math.round(total);
+      customer.points = (customer.points || 0) + pointsEarned;
+      customer.totalSpent = (customer.totalSpent || 0) + total;
+      customer.lastPurchase = Date.now();
+      saveState();
+      updateStoreCustomerInfo(customer);
+      console.log(`Points ajoutés: ${pointsEarned} (Total: ${customer.points})`);
+    }
+  }
+
   state.storeCart = [];
   saveState();
   renderProducts();
 
-  if (elements.storeCustomer) elements.storeCustomer.value = "";
+  // Réinitialiser le client sélectionné
+  clearStoreCustomer();
   if (elements.storeDiscount) elements.storeDiscount.value = "0";
   updateStoreTotals();
 
@@ -1142,10 +1163,11 @@ function handleStoreCheckout(event) {
     setTpeStatus("Montant transféré depuis la caisse.");
   }
 
+  const pointsMsg = customerId ? ` Points de fidélité ajoutés.` : "";
   alert(
     `Vente enregistrée : ${formatCurrency(total)} (dont remise ${formatCurrency(
       discountValue,
-    )} sur un sous-total de ${formatCurrency(subtotal)}).`,
+    )} sur un sous-total de ${formatCurrency(subtotal)}).${pointsMsg}`,
   );
   elements.storeBarcodeInput?.focus();
 }
@@ -1630,8 +1652,13 @@ function showScanCard(product, order = null, mode = "inventory") {
 }
 
 function processScanValue(rawCode, mode = currentScanMode) {
-  const code = rawCode.trim();
-  if (!code) return;
+  // Nettoyer le code avant de le traiter
+  const cleanedCode = cleanScannedCode(rawCode.trim());
+  if (!cleanedCode || cleanedCode.length < 2) {
+    console.warn('Code scanné invalide dans processScanValue:', rawCode, '->', cleanedCode);
+    return;
+  }
+  const code = cleanedCode;
   if (elements.scanResult) {
     elements.scanResult.dataset.context = mode;
   }
@@ -1676,9 +1703,20 @@ function handleScanSubmit(event) {
   event.preventDefault();
   const mode = event.currentTarget.dataset.mode ?? currentScanMode;
   currentScanMode = mode;
-  const code = elements.scanInput.value.trim();
-  if (!code) return;
-  processScanValue(code, mode);
+  const rawCode = elements.scanInput.value.trim();
+  if (!rawCode) return;
+  
+  // Nettoyer le code avant de le traiter
+  const cleanedCode = cleanScannedCode(rawCode);
+  if (!cleanedCode || cleanedCode.length < 2) {
+    console.warn('Code scanné invalide dans retrait colis:', rawCode, '->', cleanedCode);
+    return;
+  }
+  
+  // Mettre à jour le champ avec le code nettoyé
+  elements.scanInput.value = cleanedCode;
+  
+  processScanValue(cleanedCode, mode);
 }
 
 function clearScan() {
@@ -2161,6 +2199,34 @@ function attachEventListeners() {
   elements.orderForm?.addEventListener("submit", handleOrderSubmit);
   elements.orderAddItem?.addEventListener("click", () => createOrderItemRow());
   elements.scanForm?.addEventListener("submit", handleScanSubmit);
+  // Nettoyer le champ scanInput (page retrait colis) avec délai pour éviter de couper le code
+  let scanInputTimeout = null;
+  elements.scanInput?.addEventListener("input", (event) => {
+    const input = event.target;
+    const rawValue = input.value;
+    
+    // Mode diagnostic
+    if (rawValue && rawValue.length > 0) {
+      console.log('Scan retrait colis - Code brut:', rawValue, '| Longueur:', rawValue.length);
+    }
+    
+    // Attendre que le scan soit terminé avant de nettoyer (pour éviter de couper le code)
+    if (scanInputTimeout) {
+      clearTimeout(scanInputTimeout);
+    }
+    
+    scanInputTimeout = setTimeout(() => {
+      const cleanedValue = cleanScannedCode(rawValue);
+      if (rawValue !== cleanedValue) {
+        const cursorPosition = input.selectionStart;
+        input.value = cleanedValue;
+        const newPosition = Math.min(cursorPosition, cleanedValue.length);
+        input.setSelectionRange(newPosition, newPosition);
+        console.log('Scan retrait colis - Code nettoyé:', cleanedValue);
+      }
+      scanInputTimeout = null;
+    }, 400); // 400ms de délai pour laisser le temps au code complet d'arriver
+  });
   elements.clearScanResults?.addEventListener("click", clearScan);
   elements.drawerClose?.addEventListener("click", closeDrawer);
   elements.drawerOverlay?.addEventListener("click", closeDrawer);
@@ -2186,6 +2252,29 @@ function attachEventListeners() {
   elements.storeResetBtn?.addEventListener("click", handleStoreReset);
   elements.storeDiscount?.addEventListener("input", handleStoreDiscountChange);
   elements.storeCheckoutForm?.addEventListener("submit", handleStoreCheckout);
+  elements.storeCustomerSearch?.addEventListener("input", handleStoreCustomerSearch);
+  elements.storeCustomerScanBtn?.addEventListener("click", handleStoreCustomerScan);
+  elements.storeCustomerAddBtn?.addEventListener("click", handleStoreCustomerAdd);
+  elements.storeCustomerClear?.addEventListener("click", clearStoreCustomer);
+  elements.loyaltyCustomerForm?.addEventListener("submit", handleLoyaltyCustomerSubmit);
+  elements.loyaltyAddCustomerBtn?.addEventListener("click", () => {
+    if (elements.loyaltyCustomerForm) {
+      elements.loyaltyCustomerForm.style.display = "grid";
+      elements.loyaltyCustomerForm.reset();
+      elements.loyaltyCustomerForm.dataset.editingId = "";
+    }
+    if (elements.loyaltyFirstName) elements.loyaltyFirstName.focus();
+  });
+  elements.loyaltyCancelBtn?.addEventListener("click", () => {
+    if (elements.loyaltyCustomerForm) {
+      elements.loyaltyCustomerForm.style.display = "none";
+      elements.loyaltyCustomerForm.reset();
+      elements.loyaltyCustomerForm.dataset.editingId = "";
+    }
+    if (elements.loyaltyAddCustomerBtn) {
+      elements.loyaltyAddCustomerBtn.style.display = "inline-block";
+    }
+  });
   elements.tpeKeypad?.addEventListener("click", handleTpeKeypadClick);
   elements.tpeChargeBtn?.addEventListener("click", handleTpeCharge);
   elements.tpeManualBtn?.addEventListener("click", handleTpeManual);
@@ -2223,6 +2312,7 @@ function hydrateUI() {
   ensureOrderItemRows();
   renderProducts();
   renderOrders();
+  renderLoyaltyCustomers();
   clearScan();
   resetProductImagePreview();
   initializeTpe();
@@ -2286,13 +2376,19 @@ async function startWithBarcodeDetector(videoElement) {
     try {
       const barcodes = await cameraState.detector.detect(videoElement);
         if (barcodes.length) {
-          const value = barcodes[0].rawValue?.trim();
-          if (value) {
+          const rawValue = barcodes[0].rawValue?.trim();
+          if (rawValue) {
+            // Nettoyer le code scanné par la caméra
+            const cleanedValue = cleanScannedCode(rawValue);
+            if (!cleanedValue || cleanedValue.length < 2) {
+              console.warn('Code scanné invalide (caméra BarcodeDetector):', rawValue, '->', cleanedValue);
+              return;
+            }
             triggerScanHighlight();
             const target = activeScanTarget ?? elements.productSkuInput;
-            target.value = value;
+            target.value = cleanedValue;
             if (target === elements.scanInput) {
-              processScanValue(value, "pickup");
+              processScanValue(cleanedValue, "pickup");
             }
             closeSkuScanner();
             return;
@@ -2374,12 +2470,18 @@ async function startWithZxing(videoElement) {
       if (result) {
         const text = result.getText();
         if (text) {
-          const value = text.trim();
+          const rawValue = text.trim();
+          // Nettoyer le code scanné par la caméra (ZXing)
+          const cleanedValue = cleanScannedCode(rawValue);
+          if (!cleanedValue || cleanedValue.length < 2) {
+            console.warn('Code scanné invalide (caméra ZXing):', rawValue, '->', cleanedValue);
+            return;
+          }
           triggerScanHighlight();
           const target = activeScanTarget ?? elements.productSkuInput;
-          target.value = value;
+          target.value = cleanedValue;
           if (target === elements.scanInput) {
-            processScanValue(value, "pickup");
+            processScanValue(cleanedValue, "pickup");
           }
           closeSkuScanner();
         }

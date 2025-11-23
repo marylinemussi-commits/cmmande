@@ -27,6 +27,7 @@
         <li><button type="button" class="nav-link" data-nav="orders">Commandes</button></li>
         <li><button type="button" class="nav-link" data-nav="pickup">Retrait colis</button></li>
         <li><button type="button" class="nav-link" data-nav="store">Caisse</button></li>
+        <li><button type="button" class="nav-link" data-nav="loyalty">Cartes Fidélité</button></li>
         <li><button type="button" class="nav-link" data-nav="tpe">TPE</button></li>
       </ul>
       <div class="header-actions">
@@ -378,10 +379,32 @@
                 <p class="empty-state">Ajoutez des produits pour démarrer une vente.</p>
               </div>
               <form id="storeCheckoutForm" class="store-cart-footer">
-                <label class="field">
-                  <span>Client (optionnel)</span>
-                  <input type="text" id="storeCustomer" placeholder="Nom du client" />
-                </label>
+                <div class="field loyalty-section">
+                  <label>
+                    <span>Client avec carte de fidélité</span>
+                    <div class="loyalty-customer-select">
+                      <input type="text" id="storeCustomerSearch" placeholder="Rechercher ou scanner QR code" autocomplete="off" />
+                      <button type="button" class="secondary icon-text compact-button" id="storeCustomerScanBtn">
+                        <span class="material-symbols-rounded">qr_code_scanner</span>
+                        Scanner
+                      </button>
+                      <button type="button" class="secondary icon-text compact-button" id="storeCustomerAddBtn">
+                        <span class="material-symbols-rounded">person_add</span>
+                        Nouveau
+                      </button>
+                    </div>
+                    <div id="storeCustomerInfo" class="loyalty-customer-info" style="display: none;">
+                      <div class="customer-details">
+                        <strong id="storeCustomerName"></strong>
+                        <span class="customer-points">Points: <strong id="storeCustomerPoints">0</strong></span>
+                      </div>
+                      <button type="button" class="icon-button" id="storeCustomerClear" title="Retirer le client">
+                        <span class="material-symbols-rounded">close</span>
+                      </button>
+                    </div>
+                    <input type="hidden" id="storeCustomerId" />
+                  </label>
+                </div>
                 <label class="field">
                   <span>Remise (%)</span>
                   <input type="number" id="storeDiscount" min="0" max="100" value="0" />
@@ -558,6 +581,7 @@
       rel="stylesheet"
       href="https://fonts.googleapis.com/icon?family=Material+Symbols+Rounded"
     />
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
     <script src="app.js" type="module"></script>
   </body>
 </html>
