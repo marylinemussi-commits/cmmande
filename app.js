@@ -2325,7 +2325,12 @@ function attachEventListeners() {
       elements.loyaltyCustomerForm.reset();
       elements.loyaltyCustomerForm.dataset.editingId = "";
     }
-    if (elements.loyaltyFirstName) elements.loyaltyFirstName.focus();
+    if (elements.loyaltyAddCustomerBtn) {
+      elements.loyaltyAddCustomerBtn.style.display = "none";
+    }
+    if (elements.loyaltyFirstName) {
+      elements.loyaltyFirstName.focus();
+    }
   });
   elements.loyaltyCancelBtn?.addEventListener("click", () => {
     if (elements.loyaltyCustomerForm) {
@@ -2796,6 +2801,7 @@ function renderLoyaltyCustomers() {
 
 // Afficher le QR code d'un client
 async function showLoyaltyQRCode(customer) {
+  // Générer le QR code s'il n'existe pas encore
   if (!customer.qrCode) {
     customer.qrCode = await generateLoyaltyQRCode(customer.id);
     saveState();
@@ -2806,16 +2812,26 @@ async function showLoyaltyQRCode(customer) {
   
   elements.drawerContent.innerHTML = `
     <div style="text-align: center; padding: 2rem;">
-      <div style="margin-bottom: 1rem;">
-        <img src="${customer.qrCode}" alt="QR Code" style="max-width: 300px; border: 2px solid #ddd; padding: 1rem; background: white;" />
+      <div style="margin-bottom: 1.5rem;">
+        <img src="${customer.qrCode}" alt="QR Code" style="max-width: 300px; border: 2px solid var(--border); padding: 1rem; background: white; border-radius: var(--radius-xs);" />
       </div>
-      <p><strong>${customer.firstName} ${customer.lastName}</strong></p>
-      <p>Points: <strong>${customer.points || 0}</strong></p>
-      <p style="font-size: 0.9em; color: #666;">ID: ${customer.id}</p>
-      <button type="button" class="secondary" onclick="window.print()" style="margin-top: 1rem;">
-        <span class="material-symbols-rounded">print</span>
-        Imprimer la carte
-      </button>
+      <div style="margin-bottom: 1rem;">
+        <p style="font-size: 1.1rem; font-weight: 600; margin-bottom: 0.5rem;"><strong>${customer.firstName} ${customer.lastName}</strong></p>
+        <p style="margin: 0.25rem 0;">Points: <strong style="color: var(--accent);">${customer.points || 0}</strong></p>
+        ${customer.email ? `<p style="margin: 0.25rem 0; font-size: 0.9em; color: var(--text-muted);">${customer.email}</p>` : ''}
+        ${customer.phone ? `<p style="margin: 0.25rem 0; font-size: 0.9em; color: var(--text-muted);">${customer.phone}</p>` : ''}
+        <p style="font-size: 0.85em; color: var(--text-muted); margin-top: 0.5rem;">ID: ${customer.id}</p>
+      </div>
+      <div style="display: flex; gap: 0.5rem; justify-content: center; margin-top: 1.5rem;">
+        <button type="button" class="secondary" onclick="window.print()">
+          <span class="material-symbols-rounded">print</span>
+          Imprimer
+        </button>
+        <button type="button" class="secondary" onclick="navigator.clipboard.writeText('${customer.id}').then(() => alert('ID copié !'))">
+          <span class="material-symbols-rounded">content_copy</span>
+          Copier ID
+        </button>
+      </div>
     </div>
   `;
   
@@ -2847,13 +2863,15 @@ function deleteLoyaltyCustomer(customerId) {
 }
 
 // Gérer la soumission du formulaire de client
-function handleLoyaltyCustomerSubmit(event) {
+async function handleLoyaltyCustomerSubmit(event) {
   event.preventDefault();
   const formData = new FormData(event.target);
   
   const editingId = event.target.dataset.editingId;
+  let newCustomer = null;
   
   if (editingId) {
+    // Modification
     const customer = state.loyaltyCustomers.find((c) => c.id === editingId);
     if (customer) {
       customer.firstName = formData.get("firstName").trim();
@@ -2864,11 +2882,16 @@ function handleLoyaltyCustomerSubmit(event) {
       if (newPoints !== customer.points) {
         customer.points = newPoints;
       }
-      customer.qrCode = null;
+      customer.qrCode = null; // Régénérer le QR code
+      newCustomer = customer;
     }
   } else {
+    // Création - générer le QR code immédiatement
     const customer = createLoyaltyCustomer(formData);
+    // Générer le QR code dès la création
+    customer.qrCode = await generateLoyaltyQRCode(customer.id);
     state.loyaltyCustomers.push(customer);
+    newCustomer = customer;
   }
   
   saveState();
@@ -2881,6 +2904,14 @@ function handleLoyaltyCustomerSubmit(event) {
   }
   if (elements.loyaltyAddCustomerBtn) {
     elements.loyaltyAddCustomerBtn.style.display = "inline-block";
+  }
+  
+  // Si c'est une nouvelle création, afficher immédiatement le QR code
+  if (newCustomer && !editingId) {
+    // Attendre un peu pour que le formulaire se ferme
+    setTimeout(() => {
+      showLoyaltyQRCode(newCustomer);
+    }, 300);
   }
 }
 
