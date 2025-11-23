@@ -433,6 +433,72 @@
         </section>
       </section>
 
+      <section class="page" data-page="loyalty">
+        <div class="page-header">
+          <div>
+            <h2>Cartes de Fidélité</h2>
+            <p>Gérez vos clients et leurs points de fidélité. Générez des QR codes pour chaque carte.</p>
+          </div>
+          <button class="secondary" id="loyaltyAddCustomerBtn">
+            <span class="material-symbols-rounded">person_add</span>
+            Nouveau Client
+          </button>
+        </div>
+
+        <section class="panel">
+          <form id="loyaltyCustomerForm" class="form-grid" style="display: none;">
+            <div class="field">
+              <label for="loyaltyFirstName">Prénom *</label>
+              <input type="text" id="loyaltyFirstName" placeholder="Prénom du client" required />
+            </div>
+            <div class="field">
+              <label for="loyaltyLastName">Nom *</label>
+              <input type="text" id="loyaltyLastName" placeholder="Nom du client" required />
+            </div>
+            <div class="field">
+              <label for="loyaltyEmail">Email</label>
+              <input type="email" id="loyaltyEmail" placeholder="email@exemple.com" />
+            </div>
+            <div class="field">
+              <label for="loyaltyPhone">Téléphone</label>
+              <input type="tel" id="loyaltyPhone" placeholder="06 12 34 56 78" />
+            </div>
+            <div class="field">
+              <label for="loyaltyInitialPoints">Points initiaux</label>
+              <input type="number" id="loyaltyInitialPoints" min="0" value="0" placeholder="0" />
+              <small class="field-hint">Points de départ pour ce client (optionnel)</small>
+            </div>
+            <div class="form-actions">
+              <button type="button" class="secondary" id="loyaltyCancelBtn">Annuler</button>
+              <button type="submit">
+                <span class="material-symbols-rounded">save</span>
+                Enregistrer
+              </button>
+            </div>
+          </form>
+        </section>
+
+        <section class="panel">
+          <div class="table-wrapper">
+            <table id="loyaltyCustomersTable">
+              <thead>
+                <tr>
+                  <th>Client</th>
+                  <th>Points</th>
+                  <th>Total dépensé</th>
+                  <th>Contact</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+            <p class="empty-state" id="loyaltyEmptyState">
+              Aucun client enregistré. Cliquez sur "Nouveau Client" pour commencer.
+            </p>
+          </div>
+        </section>
+      </section>
+
       <section class="page" data-page="pickup">
         <div class="page-header">
           <div>
@@ -453,9 +519,13 @@
             <input
               type="text"
               id="scanInput"
-              placeholder="Scannez le colis ou tapez le code"
+              placeholder="Scannez le colis avec votre scanner USB (chiffres uniquement)"
               autofocus
+              inputmode="numeric"
             />
+            <small class="field-hint" style="margin-top: 0.5rem; display: block;">
+              Connectez votre scanner USB et scannez directement. Seuls les chiffres seront conservés.
+            </small>
           </form>
           <div class="scan-result" id="scanResult" data-context="pickup">
             <p class="empty-state">

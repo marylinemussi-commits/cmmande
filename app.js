@@ -76,7 +76,25 @@ const elements = {
   storeResetBtn: document.querySelector("#storeResetBtn"),
   storeCheckoutForm: document.querySelector("#storeCheckoutForm"),
   storeCustomer: document.querySelector("#storeCustomer"),
+  storeCustomerSearch: document.querySelector("#storeCustomerSearch"),
+  storeCustomerScanBtn: document.querySelector("#storeCustomerScanBtn"),
+  storeCustomerAddBtn: document.querySelector("#storeCustomerAddBtn"),
+  storeCustomerInfo: document.querySelector("#storeCustomerInfo"),
+  storeCustomerName: document.querySelector("#storeCustomerName"),
+  storeCustomerPoints: document.querySelector("#storeCustomerPoints"),
+  storeCustomerClear: document.querySelector("#storeCustomerClear"),
+  storeCustomerId: document.querySelector("#storeCustomerId"),
   storeDiscount: document.querySelector("#storeDiscount"),
+  loyaltyCustomerForm: document.querySelector("#loyaltyCustomerForm"),
+  loyaltyAddCustomerBtn: document.querySelector("#loyaltyAddCustomerBtn"),
+  loyaltyCancelBtn: document.querySelector("#loyaltyCancelBtn"),
+  loyaltyFirstName: document.querySelector("#loyaltyFirstName"),
+  loyaltyLastName: document.querySelector("#loyaltyLastName"),
+  loyaltyEmail: document.querySelector("#loyaltyEmail"),
+  loyaltyPhone: document.querySelector("#loyaltyPhone"),
+  loyaltyInitialPoints: document.querySelector("#loyaltyInitialPoints"),
+  loyaltyCustomersTable: document.querySelector("#loyaltyCustomersTable tbody"),
+  loyaltyEmptyState: document.querySelector("#loyaltyEmptyState"),
   storeSubtotal: document.querySelector("#storeSubtotal"),
   storeDiscountValue: document.querySelector("#storeDiscountValue"),
   storeTotal: document.querySelector("#storeTotal"),
@@ -2216,31 +2234,57 @@ function attachEventListeners() {
   elements.orderForm?.addEventListener("submit", handleOrderSubmit);
   elements.orderAddItem?.addEventListener("click", () => createOrderItemRow());
   elements.scanForm?.addEventListener("submit", handleScanSubmit);
-  // Nettoyer le champ scanInput (page retrait colis) avec délai pour éviter de couper le code
+  // Nettoyer le champ scanInput (page retrait colis) - nettoyage immédiat pour éviter les caractères AZERTY visibles
   let scanInputTimeout = null;
   elements.scanInput?.addEventListener("input", (event) => {
     const input = event.target;
-    const rawValue = input.value;
+    let rawValue = input.value;
     
     // Mode diagnostic
     if (rawValue && rawValue.length > 0) {
       console.log('Scan retrait colis - Code brut:', rawValue, '| Longueur:', rawValue.length);
     }
     
-    // Attendre que le scan soit terminé avant de nettoyer (pour éviter de couper le code)
+    // NETTOYAGE IMMÉDIAT pour éviter d'afficher les caractères AZERTY
+    // Convertir immédiatement les caractères AZERTY en chiffres caractère par caractère
+    let immediateClean = "";
+    for (let i = 0; i < rawValue.length; i++) {
+      const char = rawValue[i];
+      // Conversion AZERTY → chiffres (immédiate et complète)
+      if (char === '&') immediateClean += '1';
+      else if (char === 'é' || char === 'É') immediateClean += '2';
+      else if (char === '"') immediateClean += '3';
+      else if (char === "'") immediateClean += '4';
+      else if (char === '(') immediateClean += '5';
+      else if (char === '-') immediateClean += '6';
+      else if (char === 'è' || char === 'È') immediateClean += '7';
+      else if (char === '_') immediateClean += '8';
+      else if (char === 'ç' || char === 'Ç') immediateClean += '9';
+      else if (char === 'à' || char === 'À') immediateClean += '0';
+      else if (/[0-9]/.test(char)) immediateClean += char; // Garder les chiffres
+      // Ignorer tous les autres caractères
+    }
+    
+    // Appliquer immédiatement si différent
+    if (rawValue !== immediateClean) {
+      const cursorPosition = input.selectionStart;
+      input.value = immediateClean;
+      const newPosition = Math.min(cursorPosition, immediateClean.length);
+      input.setSelectionRange(newPosition, newPosition);
+      console.log('Scan retrait colis - Nettoyage immédiat:', rawValue, '->', immediateClean);
+    }
+    
+    // Attendre la fin du scan pour le traitement final
     if (scanInputTimeout) {
       clearTimeout(scanInputTimeout);
     }
     
     scanInputTimeout = setTimeout(() => {
-      // Nettoyer en mode chiffres uniquement pour retrait colis
-      const cleanedValue = cleanScannedCode(rawValue, true); // true = chiffres uniquement
-      if (rawValue !== cleanedValue) {
-        const cursorPosition = input.selectionStart;
+      const finalValue = input.value;
+      const cleanedValue = cleanScannedCode(finalValue, true); // true = chiffres uniquement
+      if (finalValue !== cleanedValue) {
         input.value = cleanedValue;
-        const newPosition = Math.min(cursorPosition, cleanedValue.length);
-        input.setSelectionRange(newPosition, newPosition);
-        console.log('Scan retrait colis - Code nettoyé (chiffres uniquement):', cleanedValue);
+        console.log('Scan retrait colis - Code final nettoyé:', cleanedValue);
       }
       scanInputTimeout = null;
     }, 400); // 400ms de délai pour laisser le temps au code complet d'arriver
@@ -2513,5 +2557,335 @@ async function startWithZxing(videoElement) {
       }
     },
   );
+}
+
+// ============================================
+// SYSTÈME DE CARTES DE FIDÉLITÉ
+// ============================================
+
+// Générer un QR code pour un client
+async function generateLoyaltyQRCode(customerId) {
+  if (!window.QRCode) {
+    console.error("Bibliothèque QRCode non chargée");
+    return null;
+  }
+  
+  try {
+    const qrData = `LOYALTY:${customerId}`;
+    const qrCodeDataUrl = await QRCode.toDataURL(qrData, {
+      width: 200,
+      margin: 2,
+      color: {
+        dark: '#000000',
+        light: '#FFFFFF'
+      }
+    });
+    return qrCodeDataUrl;
+  } catch (error) {
+    console.error("Erreur génération QR code:", error);
+    return null;
+  }
+}
+
+// Créer un nouveau client
+function createLoyaltyCustomer(formData) {
+  return {
+    id: generateId("loyalty"),
+    firstName: formData.get("firstName").trim(),
+    lastName: formData.get("lastName").trim(),
+    email: formData.get("email")?.trim() || "",
+    phone: formData.get("phone")?.trim() || "",
+    points: Number.parseInt(formData.get("initialPoints") || "0", 10) || 0,
+    totalSpent: 0,
+    createdAt: Date.now(),
+    lastPurchase: null,
+    qrCode: null, // Sera généré à la demande
+  };
+}
+
+// Rechercher un client
+function searchLoyaltyCustomer(query) {
+  if (!query || query.trim().length < 2) return [];
+  
+  const searchTerm = query.trim().toLowerCase();
+  return state.loyaltyCustomers.filter((customer) => {
+    const fullName = `${customer.firstName} ${customer.lastName}`.toLowerCase();
+    const email = (customer.email || "").toLowerCase();
+    const phone = (customer.phone || "").toLowerCase();
+    const customerId = customer.id.toLowerCase();
+    
+    return (
+      fullName.includes(searchTerm) ||
+      email.includes(searchTerm) ||
+      phone.includes(searchTerm) ||
+      customerId.includes(searchTerm)
+    );
+  });
+}
+
+// Trouver un client par ID ou QR code
+function findLoyaltyCustomerByIdOrQR(code) {
+  // Nettoyer le code scanné
+  const cleanedCode = cleanScannedCode(code);
+  
+  // Chercher par ID
+  let customer = state.loyaltyCustomers.find((c) => c.id === cleanedCode);
+  
+  // Si pas trouvé, chercher par format QR "LOYALTY:ID"
+  if (!customer && code.includes("LOYALTY:")) {
+    const qrId = code.split("LOYALTY:")[1]?.trim();
+    if (qrId) {
+      customer = state.loyaltyCustomers.find((c) => c.id === qrId);
+    }
+  }
+  
+  return customer;
+}
+
+// Mettre à jour l'affichage du client dans la caisse
+function updateStoreCustomerInfo(customer) {
+  if (!customer || !elements.storeCustomerInfo) return;
+  
+  elements.storeCustomerName.textContent = `${customer.firstName} ${customer.lastName}`;
+  elements.storeCustomerPoints.textContent = customer.points || 0;
+  elements.storeCustomerId.value = customer.id;
+  elements.storeCustomerInfo.style.display = "block";
+  if (elements.storeCustomerSearch) {
+    elements.storeCustomerSearch.value = "";
+  }
+}
+
+// Effacer le client sélectionné
+function clearStoreCustomer() {
+  if (elements.storeCustomerInfo) {
+    elements.storeCustomerInfo.style.display = "none";
+  }
+  if (elements.storeCustomerId) {
+    elements.storeCustomerId.value = "";
+  }
+  if (elements.storeCustomerSearch) {
+    elements.storeCustomerSearch.value = "";
+  }
+}
+
+// Gérer la recherche de client dans la caisse
+function handleStoreCustomerSearch(event) {
+  const query = event.target.value.trim();
+  
+  if (!query || query.length < 2) {
+    if (query.length === 0) {
+      clearStoreCustomer();
+    }
+    return;
+  }
+  
+  // Si c'est un code scanné (longueur > 10), chercher par ID/QR
+  if (query.length > 10) {
+    const customer = findLoyaltyCustomerByIdOrQR(query);
+    if (customer) {
+      updateStoreCustomerInfo(customer);
+      return;
+    }
+  }
+  
+  // Sinon, chercher par nom/email/téléphone
+  const results = searchLoyaltyCustomer(query);
+  if (results.length === 1) {
+    updateStoreCustomerInfo(results[0]);
+  } else if (results.length > 1) {
+    console.log("Plusieurs clients trouvés:", results);
+    updateStoreCustomerInfo(results[0]);
+  }
+}
+
+// Gérer le scan de QR code client
+function handleStoreCustomerScan() {
+  openSkuScanner(elements.storeCustomerSearch);
+}
+
+// Gérer l'ajout d'un nouveau client depuis la caisse
+function handleStoreCustomerAdd() {
+  setActivePage("loyalty");
+  if (elements.loyaltyCustomerForm) {
+    elements.loyaltyCustomerForm.style.display = "grid";
+  }
+  if (elements.loyaltyAddCustomerBtn) {
+    elements.loyaltyAddCustomerBtn.style.display = "none";
+  }
+  if (elements.loyaltyFirstName) {
+    elements.loyaltyFirstName.focus();
+  }
+}
+
+// Afficher les clients de fidélité
+function renderLoyaltyCustomers() {
+  if (!elements.loyaltyCustomersTable) return;
+  
+  elements.loyaltyCustomersTable.innerHTML = "";
+  
+  if (!state.loyaltyCustomers.length) {
+    if (elements.loyaltyEmptyState) {
+      elements.loyaltyEmptyState.classList.remove("hidden");
+    }
+    return;
+  }
+  
+  if (elements.loyaltyEmptyState) {
+    elements.loyaltyEmptyState.classList.add("hidden");
+  }
+  
+  state.loyaltyCustomers
+    .slice()
+    .sort((a, b) => (b.points || 0) - (a.points || 0))
+    .forEach((customer) => {
+      const row = document.createElement("tr");
+      
+      const nameCell = document.createElement("td");
+      nameCell.innerHTML = `
+        <div class="item-main">
+          <div>
+            <span class="item-title">${customer.firstName} ${customer.lastName}</span>
+            <small class="item-description">ID: ${customer.id}</small>
+          </div>
+        </div>
+      `;
+      
+      const pointsCell = document.createElement("td");
+      pointsCell.innerHTML = `<span class="badge stock">${customer.points || 0} pts</span>`;
+      
+      const spentCell = document.createElement("td");
+      spentCell.textContent = formatCurrency(customer.totalSpent || 0);
+      
+      const contactCell = document.createElement("td");
+      const contactInfo = [];
+      if (customer.email) contactInfo.push(customer.email);
+      if (customer.phone) contactInfo.push(customer.phone);
+      contactCell.textContent = contactInfo.join(" • ") || "—";
+      
+      const actionsCell = document.createElement("td");
+      actionsCell.className = "table-actions";
+      
+      const qrBtn = document.createElement("button");
+      qrBtn.className = "icon-button";
+      qrBtn.title = "Voir QR code";
+      qrBtn.innerHTML = '<span class="material-symbols-rounded">qr_code</span>';
+      qrBtn.addEventListener("click", () => showLoyaltyQRCode(customer));
+      
+      const editBtn = document.createElement("button");
+      editBtn.className = "icon-button";
+      editBtn.title = "Modifier";
+      editBtn.innerHTML = '<span class="material-symbols-rounded">edit</span>';
+      editBtn.addEventListener("click", () => editLoyaltyCustomer(customer));
+      
+      const deleteBtn = document.createElement("button");
+      deleteBtn.className = "icon-button delete";
+      deleteBtn.title = "Supprimer";
+      deleteBtn.innerHTML = '<span class="material-symbols-rounded">delete</span>';
+      deleteBtn.addEventListener("click", () => {
+        if (confirm(`Supprimer ${customer.firstName} ${customer.lastName} ?`)) {
+          deleteLoyaltyCustomer(customer.id);
+        }
+      });
+      
+      actionsCell.append(qrBtn, editBtn, deleteBtn);
+      
+      row.append(nameCell, pointsCell, spentCell, contactCell, actionsCell);
+      elements.loyaltyCustomersTable.appendChild(row);
+    });
+}
+
+// Afficher le QR code d'un client
+async function showLoyaltyQRCode(customer) {
+  if (!customer.qrCode) {
+    customer.qrCode = await generateLoyaltyQRCode(customer.id);
+    saveState();
+  }
+  
+  elements.drawerTitle.textContent = `Carte de Fidélité - ${customer.firstName} ${customer.lastName}`;
+  elements.drawerSubtitle.textContent = `${customer.points || 0} points`;
+  
+  elements.drawerContent.innerHTML = `
+    <div style="text-align: center; padding: 2rem;">
+      <div style="margin-bottom: 1rem;">
+        <img src="${customer.qrCode}" alt="QR Code" style="max-width: 300px; border: 2px solid #ddd; padding: 1rem; background: white;" />
+      </div>
+      <p><strong>${customer.firstName} ${customer.lastName}</strong></p>
+      <p>Points: <strong>${customer.points || 0}</strong></p>
+      <p style="font-size: 0.9em; color: #666;">ID: ${customer.id}</p>
+      <button type="button" class="secondary" onclick="window.print()" style="margin-top: 1rem;">
+        <span class="material-symbols-rounded">print</span>
+        Imprimer la carte
+      </button>
+    </div>
+  `;
+  
+  elements.drawer.classList.add("open");
+  elements.drawerOverlay.classList.add("visible");
+}
+
+// Modifier un client
+function editLoyaltyCustomer(customer) {
+  if (elements.loyaltyCustomerForm) {
+    elements.loyaltyCustomerForm.style.display = "grid";
+    elements.loyaltyCustomerForm.dataset.editingId = customer.id;
+    
+    if (elements.loyaltyFirstName) elements.loyaltyFirstName.value = customer.firstName;
+    if (elements.loyaltyLastName) elements.loyaltyLastName.value = customer.lastName;
+    if (elements.loyaltyEmail) elements.loyaltyEmail.value = customer.email || "";
+    if (elements.loyaltyPhone) elements.loyaltyPhone.value = customer.phone || "";
+    if (elements.loyaltyInitialPoints) elements.loyaltyInitialPoints.value = customer.points || 0;
+    
+    if (elements.loyaltyFirstName) elements.loyaltyFirstName.focus();
+  }
+}
+
+// Supprimer un client
+function deleteLoyaltyCustomer(customerId) {
+  state.loyaltyCustomers = state.loyaltyCustomers.filter((c) => c.id !== customerId);
+  saveState();
+  renderLoyaltyCustomers();
+}
+
+// Gérer la soumission du formulaire de client
+function handleLoyaltyCustomerSubmit(event) {
+  event.preventDefault();
+  const formData = new FormData(event.target);
+  
+  const editingId = event.target.dataset.editingId;
+  
+  if (editingId) {
+    const customer = state.loyaltyCustomers.find((c) => c.id === editingId);
+    if (customer) {
+      customer.firstName = formData.get("firstName").trim();
+      customer.lastName = formData.get("lastName").trim();
+      customer.email = formData.get("email")?.trim() || "";
+      customer.phone = formData.get("phone")?.trim() || "";
+      const newPoints = Number.parseInt(formData.get("initialPoints") || "0", 10) || 0;
+      if (newPoints !== customer.points) {
+        customer.points = newPoints;
+      }
+      customer.qrCode = null;
+    }
+  } else {
+    const customer = createLoyaltyCustomer(formData);
+    state.loyaltyCustomers.push(customer);
+  }
+  
+  saveState();
+  renderLoyaltyCustomers();
+  
+  event.target.reset();
+  event.target.dataset.editingId = "";
+  if (elements.loyaltyCustomerForm) {
+    elements.loyaltyCustomerForm.style.display = "none";
+  }
+  if (elements.loyaltyAddCustomerBtn) {
+    elements.loyaltyAddCustomerBtn.style.display = "inline-block";
+  }
+}
+
+// Initialiser la page de fidélité
+function initLoyaltyPage() {
+  renderLoyaltyCustomers();
 }
 
