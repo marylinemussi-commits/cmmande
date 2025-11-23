@@ -298,32 +298,36 @@
           </div>
         </div>
 
-        <div class="store-hero">
-          <div>
-            <h3>Flux rapide</h3>
-            <p>Ajoutez des produits via le catalogue ou un scan code-barres, appliquez une remise puis transférez le montant au TPE virtuel.</p>
-          </div>
-          <div class="store-hero-tip">
-            <span class="material-symbols-rounded">tips_and_updates</span>
-            <p>Pensez à préparer votre panier avant la télécollecte : le montant s’affiche automatiquement côté TPE.</p>
-          </div>
-        </div>
-
         <div class="store-metrics">
           <article class="store-metric">
-            <span class="label">Produits actifs</span>
-            <strong id="storeMetricProducts">0</strong>
-            <small>Articles disponibles à la vente</small>
+            <div class="store-metric-icon">
+              <span class="material-symbols-rounded">inventory_2</span>
+            </div>
+            <div class="store-metric-content">
+              <span class="label">Produits actifs</span>
+              <strong id="storeMetricProducts">0</strong>
+              <small>Articles disponibles</small>
+            </div>
           </article>
           <article class="store-metric">
-            <span class="label">Articles panier</span>
-            <strong id="storeMetricCart">0</strong>
-            <small>Unités actuellement sélectionnées</small>
+            <div class="store-metric-icon">
+              <span class="material-symbols-rounded">shopping_cart</span>
+            </div>
+            <div class="store-metric-content">
+              <span class="label">Articles panier</span>
+              <strong id="storeMetricCart">0</strong>
+              <small>Unités sélectionnées</small>
+            </div>
           </article>
           <article class="store-metric accent">
-            <span class="label">Total estimé</span>
-            <strong id="storeMetricTotal">0,00 €</strong>
-            <small>Montant à encaisser avant remise TPE</small>
+            <div class="store-metric-icon">
+              <span class="material-symbols-rounded">euro</span>
+            </div>
+            <div class="store-metric-content">
+              <span class="label">Total estimé</span>
+              <strong id="storeMetricTotal">0,00 €</strong>
+              <small>Montant à encaisser</small>
+            </div>
           </article>
         </div>
 
@@ -332,33 +336,35 @@
             <div class="store-products">
               <header class="store-products-header">
                 <div>
-                  <h3>Catalogue produits</h3>
-                  <p>Filtrez votre inventaire ou scannez un article pour l’ajouter au ticket.</p>
+                  <h3>
+                    <span class="material-symbols-rounded">storefront</span>
+                    Catalogue produits
+                  </h3>
+                  <p>Filtrez votre inventaire ou scannez un article pour l'ajouter au ticket.</p>
                 </div>
               </header>
               <div class="store-filters">
                 <div class="store-filter">
-                  <label for="storeSearch">Rechercher un produit</label>
+                  <label for="storeBarcodeInput">
+                    <span class="material-symbols-rounded">qr_code_scanner</span>
+                    Scanner code-barres
+                  </label>
+                  <div class="store-barcode">
+                    <input type="text" id="storeBarcodeInput" placeholder="Scannez avec votre scanner USB" autofocus />
+                    <button type="button" class="secondary icon-text compact-button" id="storeScanBtn" title="Activer le champ">
+                      <span class="material-symbols-rounded">qr_code_scanner</span>
+                    </button>
+                  </div>
+                </div>
+                <div class="store-filter">
+                  <label for="storeSearch">
+                    <span class="material-symbols-rounded">search</span>
+                    Rechercher un produit
+                  </label>
                   <div class="store-filter-input">
                     <input type="search" id="storeSearch" placeholder="Nom, code-barres ou description" />
                     <span class="material-symbols-rounded">search</span>
                   </div>
-                </div>
-                <div class="store-filter">
-                  <label for="storeBarcodeInput">Ajouter via code-barres</label>
-                  <div class="store-barcode">
-                    <input type="text" id="storeBarcodeInput" placeholder="Scannez avec votre scanner USB ou saisissez un code" autofocus />
-                    <button type="button" class="secondary icon-text compact-button" id="storeScanBtn">
-                      <span class="material-symbols-rounded">qr_code_scanner</span>
-                      Activer le champ
-                    </button>
-                  </div>
-                  <small class="field-hint" style="margin-top: 0.5rem; display: block;">
-                    Connectez votre scanner USB et scannez directement dans le champ ci-dessus.
-                    <br>
-                    <strong>Problème de scan ?</strong> Vérifiez que votre scanner est configuré en mode "Clavier" (HID) et non en mode "Série" ou "USB CDC". 
-                    Ouvrez la console du navigateur (F12) pour voir les codes bruts reçus.
-                  </small>
                 </div>
               </div>
               <div class="store-products-grid" id="storeProductsList"></div>
@@ -367,65 +373,85 @@
             <div class="store-cart">
               <header class="store-cart-header">
                 <div>
-                  <h3>Ticket de caisse</h3>
-                  <p>Modifiez les quantités, supprimez les lignes ou appliquez une remise globale.</p>
+                  <h3>
+                    <span class="material-symbols-rounded">receipt_long</span>
+                    Ticket de caisse
+                  </h3>
+                  <p>Modifiez les quantités, supprimez les lignes ou appliquez une remise.</p>
                 </div>
-                <button type="button" class="secondary" id="storeResetBtn">
+                <button type="button" class="secondary icon-text" id="storeResetBtn" title="Vider le panier">
                   <span class="material-symbols-rounded">delete_sweep</span>
                   Vider
                 </button>
               </header>
               <div class="store-cart-content" id="storeCartList">
-                <p class="empty-state">Ajoutez des produits pour démarrer une vente.</p>
+                <div class="empty-state-cart">
+                  <span class="material-symbols-rounded">shopping_cart</span>
+                  <p>Ajoutez des produits pour démarrer une vente</p>
+                  <small>Scannez un code-barres ou sélectionnez un produit dans le catalogue</small>
+                </div>
               </div>
               <form id="storeCheckoutForm" class="store-cart-footer">
-                <div class="field loyalty-section">
-                  <label>
-                    <span>Client avec carte de fidélité</span>
-                    <div class="loyalty-customer-select">
-                      <input type="text" id="storeCustomerSearch" placeholder="Rechercher ou scanner QR code" autocomplete="off" />
-                      <button type="button" class="secondary icon-text compact-button" id="storeCustomerScanBtn">
-                        <span class="material-symbols-rounded">qr_code_scanner</span>
-                        Scanner
-                      </button>
-                      <button type="button" class="secondary icon-text compact-button" id="storeCustomerAddBtn">
-                        <span class="material-symbols-rounded">person_add</span>
-                        Nouveau
-                      </button>
-                    </div>
-                    <div id="storeCustomerInfo" class="loyalty-customer-info" style="display: none;">
-                      <div class="customer-details">
+                <div class="store-cart-section">
+                  <h4>
+                    <span class="material-symbols-rounded">loyalty</span>
+                    Carte de fidélité
+                  </h4>
+                  <div class="loyalty-customer-select">
+                    <input type="text" id="storeCustomerSearch" placeholder="Rechercher ou scanner QR code" autocomplete="off" />
+                    <button type="button" class="secondary icon-text compact-button" id="storeCustomerScanBtn" title="Scanner QR code">
+                      <span class="material-symbols-rounded">qr_code_scanner</span>
+                    </button>
+                    <button type="button" class="secondary icon-text compact-button" id="storeCustomerAddBtn" title="Nouveau client">
+                      <span class="material-symbols-rounded">person_add</span>
+                    </button>
+                  </div>
+                  <div id="storeCustomerInfo" class="loyalty-customer-info" style="display: none;">
+                    <div class="customer-details">
+                      <div class="customer-name">
+                        <span class="material-symbols-rounded">person</span>
                         <strong id="storeCustomerName"></strong>
-                        <span class="customer-points">Points: <strong id="storeCustomerPoints">0</strong></span>
                       </div>
-                      <button type="button" class="icon-button" id="storeCustomerClear" title="Retirer le client">
-                        <span class="material-symbols-rounded">close</span>
-                      </button>
+                      <div class="customer-points">
+                        <span class="material-symbols-rounded">stars</span>
+                        <span>Points: <strong id="storeCustomerPoints">0</strong></span>
+                      </div>
                     </div>
-                    <input type="hidden" id="storeCustomerId" />
-                  </label>
+                    <button type="button" class="icon-button" id="storeCustomerClear" title="Retirer le client">
+                      <span class="material-symbols-rounded">close</span>
+                    </button>
+                  </div>
+                  <input type="hidden" id="storeCustomerId" />
                 </div>
-                <label class="field">
-                  <span>Remise (%)</span>
-                  <input type="number" id="storeDiscount" min="0" max="100" value="0" />
-                </label>
+                
+                <div class="store-cart-section">
+                  <h4>
+                    <span class="material-symbols-rounded">percent</span>
+                    Remise
+                  </h4>
+                  <div class="store-discount-input">
+                    <input type="number" id="storeDiscount" min="0" max="100" value="0" placeholder="0" />
+                    <span>%</span>
+                  </div>
+                </div>
+                
                 <div class="store-summary">
-                  <div>
+                  <div class="store-summary-line">
                     <span>Sous-total</span>
                     <strong id="storeSubtotal">0,00 €</strong>
                   </div>
-                  <div>
+                  <div class="store-summary-line discount">
                     <span>Remise</span>
                     <strong id="storeDiscountValue">- 0,00 €</strong>
                   </div>
-                  <div class="store-total">
+                  <div class="store-summary-total">
                     <span>Total à encaisser</span>
                     <strong id="storeTotal">0,00 €</strong>
                   </div>
                 </div>
                 <button type="submit" class="checkout-button">
                   <span class="material-symbols-rounded">payments</span>
-                  Encaisser et enregistrer
+                  <span>Encaisser et enregistrer</span>
                 </button>
               </form>
             </div>

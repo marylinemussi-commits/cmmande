@@ -732,8 +732,13 @@ function renderStoreCart() {
   normalizeStoreCart();
 
   if (!state.storeCart.length) {
-    elements.storeCartList.innerHTML =
-      '<p class="empty-state">Ajoutez des produits pour démarrer une vente.</p>';
+    elements.storeCartList.innerHTML = `
+      <div class="empty-state-cart">
+        <span class="material-symbols-rounded">shopping_cart</span>
+        <p>Ajoutez des produits pour démarrer une vente</p>
+        <small>Scannez un code-barres ou sélectionnez un produit dans le catalogue</small>
+      </div>
+    `;
     updateStoreTotals();
     return;
   }
