@@ -876,13 +876,94 @@ function handleStoreReset() {
   elements.storeBarcodeInput?.focus();
 }
 
+// Mapping AZERTY vers ASCII pour corriger les problèmes de layout clavier
+// Le scanner envoie des codes de touches qui sont interprétés comme AZERTY
+// Rangée AZERTY: & é " ' ( - è _ ç à
+// Correspond à:   1 2 3 4 5 6 7 8 9 0
+const AZERTY_NUMBER_MAP = {
+  '&': '1', '"': '3', "'": '4', '(': '5',
+  '-': '6', '_': '8'
+};
+
+const AZERTY_LETTER_MAP = {
+  'ê': 'e', 'ë': 'e',
+  'ù': 'u', 'û': 'u', 'ü': 'u',
+  'ô': 'o', 'ö': 'o',
+  'î': 'i', 'ï': 'i',
+  'À': 'A', 'Ê': 'E', 'Ë': 'E',
+  'Ç': 'C', 'Ù': 'U', 'Û': 'U', 'Ü': 'U',
+  'Ô': 'O', 'Ö': 'O',
+  'Î': 'I', 'Ï': 'I',
+  '²': '2', '³': '3', '°': '0'
+};
+
+// Détecter les patterns AZERTY courants et les convertir
+// Exemple: çè_é"é'àé(&éç pourrait être 9876543210
+function detectAndConvertAzertyPattern(text) {
+  if (!text) return text;
+  
+  // Caractères AZERTY typiques des chiffres
+  const azertyNumberChars = ['ç', 'è', 'é', 'à', '&', '"', "'", '(', '-', '_'];
+  const azertyCount = Array.from(text).filter(c => azertyNumberChars.includes(c)).length;
+  
+  // Si plus de 30% des caractères sont des caractères AZERTY de chiffres, 
+  // c'est probablement un code numérique mal interprété
+  if (azertyCount > text.length * 0.3) {
+    // Convertir caractère par caractère selon le mapping AZERTY
+    let converted = "";
+    for (let i = 0; i < text.length; i++) {
+      const char = text[i];
+      
+      // Mapping spécifique pour les caractères ambigus (priorité aux chiffres)
+      if (char === 'é') {
+        converted += '2'; // Touche 2 en AZERTY
+      } else if (char === 'è') {
+        converted += '7'; // Touche 7 en AZERTY
+      } else if (char === 'ç') {
+        converted += '9'; // Touche 9 en AZERTY
+      } else if (char === 'à') {
+        converted += '0'; // Touche 0 en AZERTY
+      } else if (AZERTY_NUMBER_MAP[char]) {
+        converted += AZERTY_NUMBER_MAP[char];
+      } else if (/[a-zA-Z0-9]/.test(char)) {
+        converted += char; // Garder les caractères valides
+      }
+      // Ignorer les autres caractères
+    }
+    return converted;
+  }
+  
+  return text;
+}
+
+// Fonction pour convertir AZERTY vers ASCII (pour les lettres restantes)
+function convertAzertyToAscii(text) {
+  if (!text) return "";
+  let converted = "";
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    // Convertir les lettres accentuées restantes
+    if (AZERTY_LETTER_MAP[char]) {
+      converted += AZERTY_LETTER_MAP[char];
+    } else {
+      converted += char;
+    }
+  }
+  return converted;
+}
+
 // Fonction pour nettoyer et normaliser les codes scannés
 function cleanScannedCode(rawCode) {
   if (!rawCode) return "";
   
-  // Ne garder QUE les caractères ASCII alphanumériques (a-z, A-Z, 0-9) et tirets/underscores
-  // Cela supprime automatiquement tous les caractères accentués et spéciaux
-  let cleaned = rawCode
+  // Étape 1: Détecter et convertir les patterns AZERTY
+  let converted = detectAndConvertAzertyPattern(rawCode);
+  
+  // Étape 2: Convertir les caractères AZERTY restants vers ASCII
+  converted = convertAzertyToAscii(converted);
+  
+  // Étape 3: Ne garder QUE les caractères ASCII alphanumériques (a-z, A-Z, 0-9) et tirets/underscores
+  let cleaned = converted
     .replace(/[^a-zA-Z0-9\-_]/g, '') // Ne garder que alphanumériques ASCII + tirets/underscores
     .trim();
   
