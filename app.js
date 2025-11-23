@@ -1919,7 +1919,13 @@ function attachEventListeners() {
   elements.productImageClear?.addEventListener("click", handleProductImageClear);
   elements.scanSkuBtn?.addEventListener("click", () => openSkuScanner(elements.productSkuInput));
   elements.pickupScanBtn?.addEventListener("click", () => openSkuScanner(elements.scanInput));
-  elements.storeScanBtn?.addEventListener("click", () => openSkuScanner(elements.storeBarcodeInput));
+  // Pour la caisse, on utilise un scanner USB (pas de caméra)
+  elements.storeScanBtn?.addEventListener("click", () => {
+    if (elements.storeBarcodeInput) {
+      elements.storeBarcodeInput.focus();
+      elements.storeBarcodeInput.select();
+    }
+  });
   elements.storeProductsList?.addEventListener("click", handleStoreProductsClick);
   elements.storeCartList?.addEventListener("click", handleStoreCartClick);
   elements.storeSearch?.addEventListener("input", handleStoreSearch);
