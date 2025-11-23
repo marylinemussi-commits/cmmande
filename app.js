@@ -875,10 +875,56 @@ function handleStoreReset() {
   elements.storeBarcodeInput?.focus();
 }
 
+// Fonction pour nettoyer et normaliser les codes scannés
+function cleanScannedCode(rawCode) {
+  if (!rawCode) return "";
+  
+  // Supprimer les caractères de contrôle et les caractères spéciaux indésirables
+  let cleaned = rawCode
+    .replace(/[\x00-\x1F\x7F]/g, '') // Supprimer les caractères de contrôle
+    .replace(/['":;ù!@#$%^&*()+=\[\]{}|\\<>?\/]/g, '') // Supprimer les caractères spéciaux problématiques
+    .replace(/\s+/g, '') // Supprimer tous les espaces
+    .trim();
+  
+  // Si le code contient encore des caractères non valides, ne garder que alphanumériques et tirets
+  if (!/^[\w\d\-_]+$/.test(cleaned)) {
+    cleaned = cleaned.replace(/[^\w\d\-_]/g, '');
+  }
+  
+  return cleaned;
+}
+
+// Fonction pour nettoyer le champ en temps réel
+function handleStoreBarcodeInput(event) {
+  const input = event.target;
+  const rawValue = input.value;
+  const cleanedValue = cleanScannedCode(rawValue);
+  
+  // Si la valeur a changé après nettoyage, mettre à jour le champ
+  if (rawValue !== cleanedValue) {
+    const cursorPosition = input.selectionStart;
+    input.value = cleanedValue;
+    // Restaurer la position du curseur si possible
+    const newPosition = Math.min(cursorPosition, cleanedValue.length);
+    input.setSelectionRange(newPosition, newPosition);
+  }
+}
+
 function addStoreProductBySku(code) {
-  const product = state.products.find((item) => item.sku === code);
+  // Nettoyer le code avant de chercher
+  const cleanedCode = cleanScannedCode(code);
+  if (!cleanedCode) {
+    return false;
+  }
+  
+  const product = state.products.find((item) => {
+    // Nettoyer aussi le SKU du produit pour la comparaison
+    const cleanedSku = cleanScannedCode(item.sku);
+    return cleanedSku === cleanedCode || item.sku === cleanedCode;
+  });
+  
   if (!product) {
-    alert(`Aucun produit avec le code ${code}.`);
+    alert(`Aucun produit avec le code ${cleanedCode}.`);
     return false;
   }
   addStoreProductToCart(product.id);
@@ -888,9 +934,24 @@ function addStoreProductBySku(code) {
 function handleStoreBarcodeSubmit(event) {
   if (event?.key && event.key !== "Enter") return;
   event?.preventDefault?.();
-  const code = elements.storeBarcodeInput?.value.trim();
-  if (!code) return;
-  const success = addStoreProductBySku(code);
+  const rawCode = elements.storeBarcodeInput?.value;
+  if (!rawCode) return;
+  
+  // Nettoyer le code scanné
+  const cleanedCode = cleanScannedCode(rawCode);
+  if (!cleanedCode) {
+    if (elements.storeBarcodeInput) {
+      elements.storeBarcodeInput.value = "";
+    }
+    return;
+  }
+  
+  // Mettre à jour le champ avec le code nettoyé
+  if (elements.storeBarcodeInput) {
+    elements.storeBarcodeInput.value = cleanedCode;
+  }
+  
+  const success = addStoreProductBySku(cleanedCode);
   if (success && elements.storeBarcodeInput) {
     elements.storeBarcodeInput.value = "";
   }
@@ -1929,6 +1990,7 @@ function attachEventListeners() {
   elements.storeProductsList?.addEventListener("click", handleStoreProductsClick);
   elements.storeCartList?.addEventListener("click", handleStoreCartClick);
   elements.storeSearch?.addEventListener("input", handleStoreSearch);
+  elements.storeBarcodeInput?.addEventListener("input", handleStoreBarcodeInput);
   elements.storeBarcodeInput?.addEventListener("keydown", handleStoreBarcodeSubmit);
   elements.storeResetBtn?.addEventListener("click", handleStoreReset);
   elements.storeDiscount?.addEventListener("input", handleStoreDiscountChange);
