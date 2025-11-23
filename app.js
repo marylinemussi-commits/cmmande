@@ -899,6 +899,12 @@ function cleanScannedCode(rawCode) {
 function handleStoreBarcodeInput(event) {
   const input = event.target;
   const rawValue = input.value;
+  
+  // Mode diagnostic : afficher le code brut dans la console pour déboguer
+  if (rawValue && rawValue.length > 0) {
+    console.log('Code brut reçu du scanner:', rawValue, '| Caractères:', Array.from(rawValue).map(c => c.charCodeAt(0)));
+  }
+  
   const cleanedValue = cleanScannedCode(rawValue);
   
   // Si la valeur a changé après nettoyage, mettre à jour le champ
@@ -908,11 +914,17 @@ function handleStoreBarcodeInput(event) {
     // Restaurer la position du curseur si possible
     const newPosition = Math.min(cursorPosition, cleanedValue.length);
     input.setSelectionRange(newPosition, newPosition);
+    
+    // Avertir si le code nettoyé est vide ou invalide
+    if (!cleanedValue || !/[a-zA-Z0-9]/.test(cleanedValue)) {
+      console.warn('Code invalide détecté. Code brut:', rawValue, '| Code nettoyé:', cleanedValue);
+      console.warn('💡 Conseil: Vérifiez la configuration de votre scanner USB. Il devrait envoyer des caractères ASCII standards.');
+    }
   }
   
   // Détection automatique des scans USB
   // Les scanners USB envoient les caractères très rapidement
-  // On attend 100ms après la dernière saisie pour traiter automatiquement
+  // On attend 150ms après la dernière saisie pour traiter automatiquement
   if (storeBarcodeScanTimeout) {
     clearTimeout(storeBarcodeScanTimeout);
   }
@@ -923,10 +935,14 @@ function handleStoreBarcodeInput(event) {
       const cleanedCode = cleanScannedCode(code);
       if (cleanedCode && cleanedCode.length >= 3 && /[a-zA-Z0-9]/.test(cleanedCode)) {
         // Code valide détecté, traiter automatiquement
+        console.log('Traitement automatique du code:', cleanedCode);
         const success = addStoreProductBySku(cleanedCode);
         if (success && input) {
           input.value = "";
         }
+      } else {
+        // Code invalide après nettoyage
+        console.warn('Code scanné invalide (trop court ou que des séparateurs):', code, '->', cleanedCode);
       }
     }
     storeBarcodeScanTimeout = null;
